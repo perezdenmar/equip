@@ -85,6 +85,20 @@ router.post('/staff', authenticateToken, authorizeRoles('ADMIN'), async (req, re
             }
         });
 
+        // Create In-App Notification
+        try {
+            await prisma.notification.create({
+                data: {
+                    userId: newStaff.id,
+                    title: 'Welcome to the Team!',
+                    message: `You have been added as ${newStaff.role} to the EQUIP platform.`,
+                    type: 'SUCCESS'
+                }
+            });
+        } catch (notifyError) {
+            console.error('Failed to create staff notification:', notifyError);
+        }
+
         res.status(201).json(newStaff);
     } catch (error) {
         console.error('Error creating staff:', error);
@@ -151,7 +165,7 @@ router.put('/students/:id', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'
             data: { firstName, lastName, contact, studentStatus }
         });
 
-        // If status changed, log it in AuditLog
+        // If status changed, log it in AuditLog and trigger notification
         if (studentStatus && currentStudent.studentStatus !== studentStatus) {
             await prisma.auditLog.create({
                 data: {
@@ -160,6 +174,20 @@ router.put('/students/:id', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'
                     details: `Changed student ${updatedStudent.email} status from ${currentStudent.studentStatus} to ${studentStatus}`
                 }
             });
+
+            // Create In-App Notification
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: studentId,
+                        title: 'Account Status Updated',
+                        message: `Your student status has been updated to ${studentStatus.toLowerCase()}.`,
+                        type: 'INFO'
+                    }
+                });
+            } catch (notifyError) {
+                console.error('Failed to create student update notification:', notifyError);
+            }
         }
 
         res.json(updatedStudent);
@@ -228,6 +256,11 @@ router.post('/trainers', authenticateToken, authorizeRoles('ADMIN'), async (req,
             return res.status(400).json({ error: 'Email already exists' });
         }
 
+        // Validation: Max 3 courses
+        if (assignedCourseIds && assignedCourseIds.length > 3) {
+            return res.status(400).json({ error: 'A trainer can only be assigned to a maximum of 3 courses.' });
+        }
+
         const newTrainer = await prisma.user.create({
             data: {
                 email,
@@ -244,6 +277,20 @@ router.post('/trainers', authenticateToken, authorizeRoles('ADMIN'), async (req,
             }
         });
 
+        // Create In-App Notification
+        try {
+            await prisma.notification.create({
+                data: {
+                    userId: newTrainer.id,
+                    title: 'Welcome, Trainer!',
+                    message: `You have been registered as a Trainer. ${newTrainer.assignedCourses.length > 0 ? `Assigned to ${newTrainer.assignedCourses.length} courses.` : ''}`,
+                    type: 'SUCCESS'
+                }
+            });
+        } catch (notifyError) {
+            console.error('Failed to create trainer notification:', notifyError);
+        }
+
         res.json(newTrainer);
     } catch (error) {
         console.error('Error creating trainer:', error);
@@ -255,6 +302,17 @@ router.post('/trainers', authenticateToken, authorizeRoles('ADMIN'), async (req,
 router.put('/trainers/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
     try {
         const { firstName, lastName, contact, assignedCourseIds } = req.body;
+
+        // Validation: Max 3 courses
+        if (assignedCourseIds && assignedCourseIds.length > 3) {
+            return res.status(400).json({ error: 'A trainer can only be assigned to a maximum of 3 courses.' });
+        }
+
+        const currentTrainer = await prisma.user.findUnique({
+            where: { id: req.params.id },
+            include: { assignedCourses: true }
+        });
+
         const updatedTrainer = await prisma.user.update({
             where: { id: req.params.id },
             data: {
@@ -269,6 +327,27 @@ router.put('/trainers/:id', authenticateToken, authorizeRoles('ADMIN'), async (r
                 assignedCourses: { select: { id: true, title: true, code: true } }
             }
         });
+
+        // Check if assignments changed
+        const oldIds = currentTrainer.assignedCourses.map(c => c.id).sort().join(',');
+        const newIds = updatedTrainer.assignedCourses.map(c => c.id).sort().join(',');
+
+        if (oldIds !== newIds) {
+            // Create In-App Notification
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: updatedTrainer.id,
+                        title: 'Course Assignments Updated',
+                        message: `Your assigned courses have been updated. You are now assigned to ${updatedTrainer.assignedCourses.length} courses.`,
+                        type: 'INFO'
+                    }
+                });
+            } catch (notifyError) {
+                console.error('Failed to create assignment update notification:', notifyError);
+            }
+        }
+
         res.json(updatedTrainer);
     } catch (error) {
         console.error('Error updating trainer:', error);
@@ -296,6 +375,23 @@ router.put('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) 
             where: { id: req.params.id },
             data: { firstName, lastName, role, isTrainer }
         });
+
+        // Trigger notification if role changed
+        if (role && targetUser.role !== role) {
+            try {
+                await prisma.notification.create({
+                    data: {
+                        userId: updatedUser.id,
+                        title: 'Account Role Updated',
+                        message: `Your account role has been updated to ${role}.`,
+                        type: 'WARNING'
+                    }
+                });
+            } catch (notifyError) {
+                console.error('Failed to create role update notification:', notifyError);
+            }
+        }
+
         res.json(updatedUser);
     } catch (error) {
         console.error('Error updating user:', error);
@@ -322,3 +418,4 @@ router.delete('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, re
 });
 
 export default router;
+

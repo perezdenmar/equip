@@ -82,6 +82,7 @@ model User {
   auditLogs    AuditLog[]
   documents    Document[]
   assignedCourses Qualification[] @relation("CourseTrainers")
+  notifications   Notification[]
 
   @@index([role])
   @@index([studentStatus])
@@ -169,6 +170,21 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("INFO") // e.g., 'INFO', 'SUCCESS', 'WARNING', 'ERROR'
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model SiteSetting {

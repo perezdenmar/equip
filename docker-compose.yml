@@ -59,7 +59,7 @@ services:
     container_name: equip-tunnel
     restart: always
     volumes:
-      - /volume1/DevProjects/AntiGravity/equip:/etc/cloudflared
+      - .:/etc/cloudflared
     command: tunnel --config /etc/cloudflared/config.yml run
     networks:
       - equip-network

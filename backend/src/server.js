@@ -15,6 +15,8 @@ import settingsRoutes from './routes/settings.js';
 import contactRoutes from './routes/contact.js';
 import certificateRoutes from './routes/certificates.js';
 import enrollmentRoutes from './routes/enrollments.js';
+import notificationRoutes from './routes/notifications.js';
+import analyticsRoutes from './routes/analytics.js';
 import { initializeScheduler } from './services/syncScheduler.js';
 
 dotenv.config();
@@ -30,18 +32,29 @@ const allowedOrigins = [
     'http://localhost:8080'
 ];
 
+if (process.env.CORS_ORIGIN) {
+    process.env.CORS_ORIGIN.split(',').forEach(o => {
+        const trimmed = o.trim();
+        if (trimmed && !allowedOrigins.includes(trimmed)) allowedOrigins.push(trimmed);
+    });
+}
+
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin) return callback(null, true); // Allow server-to-server / curl
+        if (!origin) return callback(null, true);
 
-        // Strict check: only exact domain or *.equipdigos.com subdomains allowed
-        const isEquipDomain = /^https:\/\/(www\.|api\.)?equipdigos\.com$/.test(origin);
-        const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(origin);
+        // Normalize origin: lowercase and remove trailing slash for comparison
+        const normalized = origin.toLowerCase().replace(/\/$/, '');
 
-        if (isEquipDomain || isLocalhost) {
+        const isExplicitlyAllowed = allowedOrigins.some(ao => ao.toLowerCase().replace(/\/$/, '') === normalized);
+        const isEquipDomain = /^https?:\/\/(?:www\.|api\.)?equipdigos\.com(?::\d+)?$/.test(normalized);
+        const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(normalized);
+
+        if (isExplicitlyAllowed || isEquipDomain || isLocalhost) {
             callback(null, true);
         } else {
-            callback(null, false); // Silently reject unknown origins
+            console.error(`[CORS Blocked] Origin: ${origin}`);
+            callback(null, false); // Standard way to deny
         }
     },
     credentials: true,
@@ -68,6 +81,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/certificates', certificateRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
     res.send('EQUIP API is running.');
