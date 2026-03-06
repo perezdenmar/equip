@@ -1,0 +1,72 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: equip-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-equip_db}
+    ports:
+      - "5444:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - equip-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: equip-backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-equip_db}"
+      JWT_SECRET: ${JWT_SECRET}
+      GMAIL_USER: ${GMAIL_USER}
+      GMAIL_PASS: ${GMAIL_PASS}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      OPENWEBNINJA_API_KEY: ${OPENWEBNINJA_API_KEY}
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      NODE_ENV: production
+    volumes:
+      - ./backend/uploads:/app/uploads
+    ports:
+      - "5000:5000"
+    networks:
+      - equip-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+    container_name: equip-frontend
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - equip-network
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: equip-tunnel
+    restart: always
+    volumes:
+      - /volume1/DevProjects/AntiGravity/equip:/etc/cloudflared
+    command: tunnel --config /etc/cloudflared/config.yml run
+    networks:
+      - equip-network
+
+networks:
+  equip-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
