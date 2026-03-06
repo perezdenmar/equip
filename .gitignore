@@ -1,0 +1,44 @@
+﻿# Environment secrets — NEVER commit these
+.env
+.env.local
+.env.production
+.env.*
+
+# Node dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+dist/
+build/
+frontend/dist/
+frontend/build/
+
+# Database data volume
+postgres_data/
+
+# Uploaded user files (branding assets, documents, etc.)
+backend/uploads/
+
+# Logs
+*.log
+pm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+*.swo
+
+# Cloudflare tunnel credentials (sensitive)
+*.json
+config.yml
+
+# Prisma generated client (regenerated on install)
+backend/node_modules/
+
+# Test coverage
+coverage/

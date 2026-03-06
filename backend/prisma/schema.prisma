@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+  TRAINER
+  ADMIN
+}
+
+enum EnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum StudentStatus {
+  POOL
+  ENROLLED
+  GRADUATED
+  DEBARRED
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  role         Role         @default(STUDENT)
+  isTrainer    Boolean      @default(false)
+  studentStatus StudentStatus @default(POOL)
+  firstName    String?
+  middleName   String?
+  lastName     String?
+  extensionName String?
+  
+  // Birthplace & Demographics
+  birthplaceRegion     String?
+  birthplaceProvince   String?
+  birthplaceCity       String?
+  birthplaceDistrict   String?
+  dateOfBirth          DateTime?
+  sex                  String?
+  nationality          String?
+
+  // Contact Info
+  contact              String?      // Repurposed as Mobile Number
+  telephoneNumber      String?
+  socials              Json?
+
+  // Permanent Mailing Address
+  street               String?
+  barangay             String?
+  district             String?
+  city                 String?
+  province             String?
+  region               String?
+
+  // Parents / Guardian
+  parentName           String?
+  parentAddress        String?
+
+  // Farmer/Beneficiaries
+  rsbsaNumber          String?
+  farmerName           String?
+  farmerRelationship   String?
+
+  // Consent
+  privacyConsent       Boolean      @default(false)
+
+  profilePhoto String?
+  bio          String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  enrollments  Enrollment[]
+  auditLogs    AuditLog[]
+  documents    Document[]
+  assignedCourses Qualification[] @relation("CourseTrainers")
+
+  @@index([role])
+  @@index([studentStatus])
+  @@index([createdAt])
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  userId      String
+  filename    String
+  filepath    String
+  documentType String? 
+  uploadedAt  DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum DifficultyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+model OfficialQualification {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  title       String
+  descriptor  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Qualification {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  code        String         @unique
+  duration    String?
+  level       DifficultyLevel?
+  category    String?
+  coverImage  String?
+  syllabus    String[]       // Array of syllabus items
+  trainers    User[]         @relation("CourseTrainers")
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id              String           @id @default(uuid())
+  userId          String
+  qualificationId String
+  status          EnrollmentStatus @default(PENDING)
+  requestedAt     DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qualification   Qualification    @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, qualificationId])
+}
+
+model Job {
+  id              String   @id @default(uuid())
+  title           String
+  company         String
+  description     String?
+  location        String?
+  salary          String?
+  skillsRequired  String[]
+  url             String?
+  sourceApiId     String?  @unique
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  action      String
+  details     String?
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SiteSetting {
+  key       String   @id // e.g., 'landing_hero', 'landing_categories', 'theme_config'
+  value     Json
+  updatedAt DateTime @updatedAt
+}
