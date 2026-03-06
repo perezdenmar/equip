@@ -292,7 +292,7 @@ const Trainers = () => {
                                     </h3>
 
                                     <div className="relative">
-                                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Assigned Courses</label>
+                                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Assigned Courses (Optional)</label>
 
                                         {/* Course Dropdown Toggle / Search Input */}
                                         <div
@@ -351,6 +351,10 @@ const Trainers = () => {
                                                                     <div
                                                                         key={course.id}
                                                                         onClick={() => {
+                                                                            if (!isSelected && formData.assignedCourseIds.length >= 3) {
+                                                                                alert('A trainer can handle a maximum of 3 courses simultaneously.');
+                                                                                return;
+                                                                            }
                                                                             setFormData(prev => ({
                                                                                 ...prev,
                                                                                 assignedCourseIds: isSelected
@@ -376,7 +380,7 @@ const Trainers = () => {
                                             </>
                                         )}
                                         <p className="text-xs text-zinc-500 mt-2">
-                                            Assigning a course allows the Trainer to view and manage enrolled students for that specific qualification.
+                                            A trainer can handle one to three courses simultaneously. Each course represents a batch of up to 25 students.
                                         </p>
                                     </div>
                                 </div>

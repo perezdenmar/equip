@@ -1,6 +1,7 @@
 import express from 'express';
 import prisma from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
+import { sendEnrollmentStatusEmail } from '../services/emailService.js';
 
 const router = express.Router();
 
@@ -14,15 +15,19 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(400).json({ error: 'Qualification ID is required' });
         }
 
-        // Check if already enrolled or requested
-        const existing = await prisma.enrollment.findUnique({
+        // Check if student already has an active enrollment (PENDING or APPROVED) in ANY course
+        const activeEnrollment = await prisma.enrollment.findFirst({
             where: {
-                userId_qualificationId: { userId, qualificationId }
-            }
+                userId,
+                status: { in: ['PENDING', 'APPROVED'] }
+            },
+            include: { qualification: true }
         });
 
-        if (existing) {
-            return res.status(400).json({ error: 'You have already requested enrollment for this course.' });
+        if (activeEnrollment) {
+            return res.status(400).json({
+                error: `You already have an active enrollment request for ${activeEnrollment.qualification.title}. Students can only be enrolled in one course at a time.`
+            });
         }
 
         const enrollment = await prisma.enrollment.create({
@@ -121,6 +126,22 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
             return res.status(403).json({ error: 'Unauthorized to update this enrollment' });
         }
 
+        // Batch capacity check: Max 25 APPROVED students per qualification
+        if (status === 'APPROVED') {
+            const approvedCount = await prisma.enrollment.count({
+                where: {
+                    qualificationId: enrollment.qualificationId,
+                    status: 'APPROVED'
+                }
+            });
+
+            if (approvedCount >= 25) {
+                return res.status(400).json({
+                    error: 'This batch has reached its maximum capacity of 25 students. Cannot approve more enrollments.'
+                });
+            }
+        }
+
         const updated = await prisma.enrollment.update({
             where: { id },
             data: { status },
@@ -144,6 +165,32 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
                 details: `Your enrollment for ${updated.qualification.title} was ${status.toLowerCase()}`
             }
         });
+
+        // Create In-App Notification
+        try {
+            await prisma.notification.create({
+                data: {
+                    userId: updated.userId,
+                    title: `Enrollment ${status === 'APPROVED' ? 'Approved' : 'Updated'}`,
+                    message: `${status === 'APPROVED' ? 'Congratulations! Your enrollment' : 'Your enrollment status'} for ${updated.qualification.title} has been ${status.toLowerCase()}.`,
+                    type: status === 'APPROVED' ? 'SUCCESS' : 'INFO'
+                }
+            });
+        } catch (notifyError) {
+            console.error('Failed to create in-app notification:', notifyError);
+        }
+
+        // Send Email Notification
+        try {
+            await sendEnrollmentStatusEmail(updated.user.email, {
+                studentName: `${updated.user.firstName} ${updated.user.lastName}`,
+                courseTitle: updated.qualification.title,
+                status: updated.status
+            });
+        } catch (emailError) {
+            console.error('Failed to send enrollment status email:', emailError);
+            // We don't block the response if email fails
+        }
 
         res.json(updated);
     } catch (error) {
@@ -180,3 +227,4 @@ router.get('/activity', authenticateToken, async (req, res) => {
 });
 
 export default router;
+

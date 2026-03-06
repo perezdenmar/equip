@@ -14,6 +14,7 @@ import Trainers from './pages/Trainers';
 import Students from './pages/Students';
 import AdminSettings from './pages/AdminSettings';
 import StaffManagement from './pages/StaffManagement';
+import NotificationsPage from './pages/NotificationsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
                     <Route element={<ProtectedRoute />}>
                         <Route path="dashboard" element={<Dashboard />} />
                         <Route path="profile" element={<Profile />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
                         <Route path="users" element={<Users />} />
                         <Route path="trainers" element={<Trainers />} />
                         <Route path="students" element={<Students />} />

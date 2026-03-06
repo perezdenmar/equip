@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Moon, Sun, Menu, X } from 'lucide-react';
+import { Moon, Sun, Menu, X, Bell, CheckCircle2, AlertCircle, Info, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useSettings } from '../contexts/SettingsContext.jsx';
+import axios from 'axios';
 import { API_BASE_URL } from '../config.js';
 
 const Navbar = ({ isDarkMode, toggleDarkMode }) => {
     const { t, i18n } = useTranslation();
-    const { isAuthenticated, logout } = useAuth();
+    const { isAuthenticated, logout, token } = useAuth();
     const { settings } = useSettings();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const [navItems, setNavItems] = useState([
         { id: 'home', title: t('nav.home'), path: '/', isVisible: true },
@@ -20,16 +24,66 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
         { id: 'contact', title: 'Contact Us', path: '/contact', isVisible: true }
     ]);
 
+    const fetchNotifications = async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await axios.get(`${API_BASE_URL}/api/notifications`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setNotifications(res.data);
+            setUnreadCount(res.data.filter(n => !n.isRead).length);
+        } catch (error) {
+            console.error('Error fetching notifications:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        // Poll for notifications every 30 seconds
+        const interval = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(interval);
+    }, [isAuthenticated, token]);
+
     useEffect(() => {
         if (settings && settings.navigation_menu) {
             setNavItems(settings.navigation_menu);
         }
     }, [settings]);
 
-
     const handleLogout = () => {
         logout();
         window.location.href = '/login';
+    };
+
+    const markAsRead = async (id) => {
+        try {
+            await axios.patch(`${API_BASE_URL}/api/notifications/${id}/read`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchNotifications();
+        } catch (error) {
+            console.error('Error marking read:', error);
+        }
+    };
+
+    const markAllAsRead = async () => {
+        try {
+            await axios.patch(`${API_BASE_URL}/api/notifications/read-all`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchNotifications();
+        } catch (error) {
+            console.error('Error marking all read:', error);
+        }
+    };
+
+    const getIcon = (type) => {
+        switch (type) {
+            case 'SUCCESS': return <CheckCircle2 className="text-green-500" size={18} />;
+            case 'WARNING': return <AlertCircle className="text-yellow-500" size={18} />;
+            case 'ERROR': return <XCircle className="text-red-500" size={18} />;
+            default: return <Info className="text-blue-500" size={18} />;
+        }
     };
 
     return (
@@ -77,6 +131,74 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
                             {/* Conditional Auth Rendering */}
                             {isAuthenticated ? (
                                 <>
+                                    {/* Notifications */}
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                                            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-600 dark:text-zinc-300 relative"
+                                            aria-label="Notifications"
+                                        >
+                                            <Bell size={20} />
+                                            {unreadCount > 0 && (
+                                                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                                </span>
+                                            )}
+                                        </button>
+
+                                        {isNotificationOpen && (
+                                            <div className="absolute right-0 mt-2 w-80 glass-effect border rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="p-4 border-b flex justify-between items-center bg-zinc-50/50 dark:bg-zinc-900/50">
+                                                    <h3 className="font-bold text-sm">Notifications</h3>
+                                                    {unreadCount > 0 && (
+                                                        <button
+                                                            onClick={markAllAsRead}
+                                                            className="text-[11px] text-brand-600 hover:text-brand-700 font-medium"
+                                                        >
+                                                            Mark all read
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="max-h-96 overflow-y-auto">
+                                                    {notifications.length > 0 ? (
+                                                        notifications.slice(0, 10).map((n) => (
+                                                            <div
+                                                                key={n.id}
+                                                                onClick={() => {
+                                                                    if (!n.isRead) markAsRead(n.id);
+                                                                    setIsNotificationOpen(false);
+                                                                }}
+                                                                className={`p-4 border-b last:border-0 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${!n.isRead ? 'bg-brand-50/30 dark:bg-brand-900/10' : ''}`}
+                                                            >
+                                                                <div className="flex space-x-3">
+                                                                    <div className="mt-0.5">{getIcon(n.type)}</div>
+                                                                    <div className="flex-1">
+                                                                        <p className="text-sm font-semibold leading-tight">{n.title}</p>
+                                                                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">{n.message}</p>
+                                                                        <p className="text-[10px] text-zinc-400 mt-1">
+                                                                            {new Date(n.createdAt).toLocaleDateString()} at {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="p-8 text-center text-zinc-400 text-sm">
+                                                            No notifications yet
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <Link
+                                                    to="/notifications"
+                                                    onClick={() => setIsNotificationOpen(false)}
+                                                    className="block p-3 text-center text-xs font-semibold text-brand-600 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-t"
+                                                >
+                                                    View All Notifications
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <Link
                                         to="/dashboard"
                                         className="px-5 py-2 rounded-full bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/30 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-medium transition-colors text-sm"
@@ -142,6 +264,13 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
                                         Dashboard
                                     </Link>
                                     <Link
+                                        to="/notifications"
+                                        onClick={() => setIsMenuOpen(false)}
+                                        className="block px-3 py-3 rounded-xl text-base font-medium bg-zinc-50 dark:bg-zinc-900/20 text-zinc-700 dark:text-zinc-300"
+                                    >
+                                        Notifications
+                                    </Link>
+                                    <Link
                                         to="/profile"
                                         onClick={() => setIsMenuOpen(false)}
                                         className="block px-3 py-3 rounded-xl text-base font-medium bg-accent-50 dark:bg-accent-900/20 text-accent-700 dark:text-accent-300"
@@ -176,3 +305,4 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
 };
 
 export default Navbar;
+
