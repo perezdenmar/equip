@@ -120,6 +120,45 @@ Phase 1: Migrate from in-memory cache to PostgreSQL persistence for jobs to ensu
 Phase 2: Implement RSS parsing for easy, lightweight ingestion of generic job boards.
 Phase 3: Develop targeted Playwright scrapers specifically for high-value, local technical/vocational job sites that lack APIs or RSS feeds.
 
+### 5.5 Recommended Web Scraping Targets & NLP Search Strategy
+
+**Objective:** Consolidate data from a maximum of 5 high-value job search platforms into a single, centralized database powered by NLP-driven semantic search. Users will browse these listings on EQUIP and be redirected to the original source to apply.
+
+**Top 5 Recommended Web Scraping Targets (Philippines & Remote Focus):**
+
+1.  **PhilJobNet (DOLE):**
+    -   *Why:* The official government portal. Excellent source for technical, vocational, and blue-collar jobs (e.g., Heavy Equipment Operator, Welder, Caregiver).
+    -   *Scraping Considerations:* Requires headless browsing (Playwright) as it often relies on heavy client-side rendering. Focus on extracting specific NC II requirement fields.
+2.  **JobStreet Philippines:**
+    -   *Why:* The dominant commercial job board in the country. Huge volume of entry-level to professional IT, Healthcare, and Business roles.
+    -   *Scraping Considerations:* Employs robust anti-scraping measures. Scraping must be strictly rate-limited, rotate user agents, and ideally utilize proxy networks. *Note: Always check TOS; they may actively block IPs.*
+3.  **Kalibrr:**
+    -   *Why:* Highly popular among fresh graduates and modern tech/BPO companies in the Philippines. Great UI structure.
+    -   *Scraping Considerations:* Generally has cleaner, more predictable DOM structures than older job boards, making Playwright extraction slightly easier.
+4.  **Indeed Philippines:**
+    -   *Why:* Massive aggregator itself. Excellent for finding remote or localized gig work.
+    -   *Scraping Considerations:* Very aggressive bot protection (Cloudflare). You will likely need specialized scraping APIs (e.g., ScraperAPI, BrightData) rather than a raw Playwright setup to bypass captchas successfully.
+5.  **Workabroad.ph / specialized overseas portals:**
+    -   *Why:* Crucial for vocational graduates (Welders, Nurses) looking for high-paying opportunities in Japan, Middle East, etc.
+    -   *Scraping Considerations:* Structure varies. Vital to extract visa requirements and specific destination countries.
+
+**Consolidation & NLP-Powered Search Architecture:**
+
+1.  **Data Ingestion & Normalization Pipeline:**
+    -   Cron jobs trigger Playwright scripts daily during off-peak hours (e.g., 2:00 AM PHT).
+    -   Extracted data is normalized into a unified Prisma `JobListing` schema: `id`, `title`, `company`, `location`, `salary_range`, `description`, `original_url`, `source_platform`, `date_posted`.
+2.  **NLP Embedding Generation:**
+    -   Once a job is inserted into the database, an asynchronous worker triggers an NLP process.
+    -   Using an embedding model (like `text-embedding-3-small` from OpenAI or a local Hugging Face model), generate a high-dimensional vector representation of the combined `title` and `description`.
+    -   Store these vectors using `pgvector` extension in PostgreSQL.
+3.  **Semantic Search Execution:**
+    -   When a user searches (e.g., "I want to build houses" or "online encoding work"), the backend converts the query into a vector using the same embedding model.
+    -   Perform a Cosine Similarity search in PostgreSQL (`pgvector`) to find the nearest job vectors.
+    -   This allows the platform to understand *intent* rather than just exact keyword matches.
+4.  **User Redirection (The "Aggregator Model"):**
+    -   The frontend displays the consolidated results beautifully.
+    -   The "Apply Now" button simply links to the stored `original_url` with a `target="_blank"`, sending the user directly to JobStreet, PhilJobNet, etc., to complete the application process. This minimizes liability and avoids complex multi-site authentication handling.
+
 ## 6. Conclusion
 
 The EQUIP platform possesses a solid, modern foundation. The immediate priority should be establishing a testing framework and migrating job caching to persistent storage. Subsequently, implementing the Calendar scheduling and expanding the AI/NLP capabilities will significantly elevate the platform's value proposition for both students and trainers.
