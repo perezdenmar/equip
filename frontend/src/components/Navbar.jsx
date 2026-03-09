@@ -20,6 +20,7 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
         { id: 'home', title: t('nav.home'), path: '/', isVisible: true },
         { id: 'quals', title: t('nav.qualifications'), path: '/qualifications', isVisible: true },
         { id: 'jobs', title: t('nav.jobs'), path: '/jobs', isVisible: true },
+        { id: 'partners', title: 'Partners', path: '/partners', isVisible: true },
         { id: 'courses', title: 'Online Courses', path: '/courses', isVisible: true },
         { id: 'contact', title: 'Contact Us', path: '/contact', isVisible: true }
     ]);
@@ -46,7 +47,19 @@ const Navbar = ({ isDarkMode, toggleDarkMode }) => {
 
     useEffect(() => {
         if (settings && settings.navigation_menu) {
-            setNavItems(settings.navigation_menu);
+            const dynamicItems = settings.navigation_menu;
+            // Ensure Partners is included if not present in dynamic menu
+            if (!dynamicItems.find(item => item.id === 'partners' || item.path === '/partners')) {
+                const partnersItem = { id: 'partners', title: 'Partners', path: '/partners', isVisible: true };
+                // Insert before contact if possible, otherwise at the end
+                const contactIndex = dynamicItems.findIndex(item => item.id === 'contact');
+                if (contactIndex !== -1) {
+                    dynamicItems.splice(contactIndex, 0, partnersItem);
+                } else {
+                    dynamicItems.push(partnersItem);
+                }
+            }
+            setNavItems([...dynamicItems]);
         }
     }, [settings]);
 

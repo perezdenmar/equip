@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../lib/prisma.js';
+import { notifyQualificationAction } from '../services/notificationService.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { sendEnrollmentStatusEmail } from '../services/emailService.js';
 
@@ -30,6 +31,16 @@ router.post('/', authenticateToken, async (req, res) => {
             });
         }
 
+        const qualification = await prisma.qualification.findUnique({
+            where: { id: qualificationId }
+        });
+
+        if (!qualification || qualification.status !== 'OPEN') {
+            return res.status(400).json({
+                error: 'This course is not currently open for enrollment. Please add it to your wishlist to be notified when it becomes available.'
+            });
+        }
+
         const enrollment = await prisma.enrollment.create({
             data: {
                 userId,
@@ -49,6 +60,16 @@ router.post('/', authenticateToken, async (req, res) => {
                 details: `Requested enrollment for: ${enrollment.qualification.title}`
             }
         });
+
+        // Notify Admins
+        try {
+            const userData = await prisma.user.findUnique({ where: { id: userId } });
+            if (userData) {
+                await notifyQualificationAction(userData, qualificationId, 'ENROLLMENT_REQUEST');
+            }
+        } catch (err) {
+            console.error('Enrollment notification failed:', err);
+        }
 
         res.status(201).json(enrollment);
     } catch (error) {
@@ -102,7 +123,7 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
         const { status } = req.body;
         const { role, userId } = req.user;
 
-        if (!['APPROVED', 'REJECTED'].includes(status)) {
+        if (!['APPROVED', 'REJECTED', 'COMPLETED'].includes(status)) {
             return res.status(400).json({ error: 'Invalid status' });
         }
 
@@ -142,10 +163,31 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
             }
         }
 
-        const updated = await prisma.enrollment.update({
-            where: { id },
-            data: { status },
-            include: { qualification: true, user: true }
+        const updated = await prisma.$transaction(async (tx) => {
+            const up = await tx.enrollment.update({
+                where: { id },
+                data: { status },
+                include: { qualification: true, user: true }
+            });
+
+            // If COMPLETED, award 100 points
+            if (status === 'COMPLETED') {
+                await tx.user.update({
+                    where: { id: enrollment.userId },
+                    data: { points: { increment: 100 } }
+                });
+
+                await tx.pointsTransaction.create({
+                    data: {
+                        userId: enrollment.userId,
+                        amount: 100,
+                        reason: `Completed: ${up.qualification.title}`,
+                        type: 'ACCRUAL'
+                    }
+                });
+            }
+
+            return up;
         });
 
         // Log activity for the staff/trainer
@@ -171,9 +213,11 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
             await prisma.notification.create({
                 data: {
                     userId: updated.userId,
-                    title: `Enrollment ${status === 'APPROVED' ? 'Approved' : 'Updated'}`,
-                    message: `${status === 'APPROVED' ? 'Congratulations! Your enrollment' : 'Your enrollment status'} for ${updated.qualification.title} has been ${status.toLowerCase()}.`,
-                    type: status === 'APPROVED' ? 'SUCCESS' : 'INFO'
+                    title: status === 'COMPLETED' ? 'Course Completed!' : `Enrollment ${status === 'APPROVED' ? 'Approved' : 'Updated'}`,
+                    message: status === 'COMPLETED'
+                        ? `Congratulations! You have successfully completed ${updated.qualification.title} and earned 100 points.`
+                        : `${status === 'APPROVED' ? 'Congratulations! Your enrollment' : 'Your enrollment status'} for ${updated.qualification.title} has been ${status.toLowerCase()}.`,
+                    type: (status === 'APPROVED' || status === 'COMPLETED') ? 'SUCCESS' : 'INFO'
                 }
             });
         } catch (notifyError) {

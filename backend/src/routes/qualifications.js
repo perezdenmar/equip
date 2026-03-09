@@ -63,7 +63,7 @@ router.get('/:id', async (req, res) => {
 // Create a new qualification
 router.post('/', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'), async (req, res) => {
     try {
-        const { title, description, code, trainerIds, duration, level, category, coverImage, syllabus } = req.body;
+        const { title, description, code, trainerIds, duration, level, category, coverImage, syllabus, status, startDate, endDate } = req.body;
 
         // Basic validation
         if (!title || !code) {
@@ -80,6 +80,9 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'), async (r
                 category,
                 coverImage,
                 syllabus: syllabus || [],
+                status: status || 'COMING_SOON',
+                startDate: startDate ? new Date(startDate) : null,
+                endDate: endDate ? new Date(endDate) : null,
                 trainers: trainerIds?.length > 0 ? {
                     connect: trainerIds.map(id => ({ id }))
                 } : undefined
@@ -100,7 +103,7 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'), async (r
 // Update a qualification
 router.put('/:id', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'), async (req, res) => {
     try {
-        const { title, description, code, trainerIds, duration, level, category, coverImage, syllabus, isActive } = req.body;
+        const { title, description, code, trainerIds, duration, level, category, coverImage, syllabus, isActive, status, startDate, endDate } = req.body;
         const updatedQualification = await prisma.qualification.update({
             where: { id: req.params.id },
             data: {
@@ -113,6 +116,9 @@ router.put('/:id', authenticateToken, authorizeRoles('ADMIN', 'TRAINER'), async 
                 coverImage,
                 syllabus: syllabus || [],
                 isActive,
+                status,
+                startDate: startDate ? new Date(startDate) : null,
+                endDate: endDate ? new Date(endDate) : null,
                 trainers: trainerIds ? {
                     set: trainerIds.map(id => ({ id }))
                 } : undefined

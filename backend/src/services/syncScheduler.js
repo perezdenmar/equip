@@ -43,5 +43,11 @@ export const initializeScheduler = () => {
         runBackgroundSync();
     });
 
+    // 3. Schedule Announcement Worker to run every minute
+    cron.schedule('* * * * *', async () => {
+        const { checkScheduledAnnouncements } = await import('./announcementService.js');
+        checkScheduledAnnouncements();
+    });
+
     console.log('[SyncScheduler] Cron Jobs Registered and Active.');
 };

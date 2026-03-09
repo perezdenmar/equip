@@ -94,3 +94,57 @@ export const sendEnrollmentStatusEmail = async (to, { studentName, courseTitle, 
 
   await transporter.sendMail(mailOptions);
 };
+
+export const sendReferralEmail = async (to, { referrerName, referralCode }) => {
+  const mailOptions = {
+    from: `"EQUIP Rewards" <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `${referrerName} invited you to join EQUIP!`,
+    html: `
+      <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h2 style="color: #f97316; margin-bottom: 20px;">You're Invited!</h2>
+        <p>Hi there,</p>
+        <p>Your friend <strong>${referrerName}</strong> thinks you'd love using <strong>EQUIP</strong> to boost your skills and career.</p>
+        <div style="background: #fff7ed; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #ffedd5; text-align: center;">
+            <p style="margin: 0 0 10px 0; color: #9a3412; font-weight: bold;">Unlock 50 points when you join!</p>
+            <a href="https://equipdigos.com/login?ref=${referralCode}" style="background: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Accept Invitation</a>
+        </div>
+        <p style="font-size: 0.875rem; color: #6b7280;">
+          EQUIP helps you find courses, get certified, and track your professional progress.
+        </p>
+        <p style="margin-top: 30px; font-size: 0.875rem; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+          Best regards,<br>
+          The EQUIP Team
+        </p>
+      </div>
+    `,
+  };
+
+  await transporter.sendMail(mailOptions);
+};
+
+export const sendAdminStaffNotificationEmail = async ({ recipients, subject, body }) => {
+  if (!recipients || recipients.length === 0) return;
+
+  const mailOptions = {
+    from: `"EQUIP Alerts" <${process.env.GMAIL_USER}>`,
+    to: recipients.join(','),
+    subject,
+    html: `
+      <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <h2 style="color: #f97316; margin-bottom: 20px;">EQUIP System Alert</h2>
+        ${body}
+        <p style="margin-top: 30px; font-size: 0.875rem; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+          Best regards,<br>
+          EQUIP Automation System
+        </p>
+      </div>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Failed to send admin notification email:', error);
+  }
+};

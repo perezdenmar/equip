@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BookOpen, GraduationCap, Loader2, Plus, Edit2, Trash2, X, Clock, User, Target, Layers } from 'lucide-react';
+import { BookOpen, GraduationCap, Loader2, Plus, Edit2, Trash2, X, Clock, User, Target, Layers, Bell, Calendar, CheckCircle2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client.js';
 
@@ -26,6 +26,9 @@ const Qualifications = () => {
         duration: '',
         level: 'BEGINNER',
         category: '',
+        status: 'COMING_SOON',
+        startDate: '',
+        endDate: '',
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -119,7 +122,10 @@ const Qualifications = () => {
                 trainerIds: qual.trainers ? qual.trainers.map(t => t.id) : [],
                 duration: qual.duration || '',
                 level: qual.level || 'BEGINNER',
-                category: qual.category || ''
+                category: qual.category || '',
+                status: qual.status || 'COMING_SOON',
+                startDate: qual.startDate ? new Date(qual.startDate).toISOString().split('T')[0] : '',
+                endDate: qual.endDate ? new Date(qual.endDate).toISOString().split('T')[0] : '',
             });
         } else {
             setEditingId(null);
@@ -130,7 +136,10 @@ const Qualifications = () => {
                 trainerIds: [],
                 duration: '',
                 level: 'BEGINNER',
-                category: ''
+                category: '',
+                status: 'COMING_SOON',
+                startDate: '',
+                endDate: '',
             });
         }
         setIsModalOpen(true);
@@ -157,19 +166,22 @@ const Qualifications = () => {
         }
     };
 
-    const handleEnrollRequest = async (qualificationId) => {
-        const currentUser = JSON.parse(localStorage.getItem('user'));
-        if (!currentUser || currentUser.role !== 'STUDENT') {
-            alert('Only students can request enrollment.');
-            return;
-        }
-
+    const handleWishlistAdd = async (qualificationId) => {
         try {
-            await api.post('/enrollments', { qualificationId });
-            alert('Enrollment request submitted successfully!');
+            await api.post('/wishlist', { qualificationId });
+            alert('Added to wishlist! You will be notified when this course opens.');
         } catch (err) {
-            console.error('Failed to request enrollment', err);
-            alert(err.response?.data?.error || 'Failed to request enrollment.');
+            console.error('Failed to add to wishlist', err);
+            alert(err.response?.data?.error || 'Failed to add to wishlist.');
+        }
+    };
+
+    const getStatusBadgeColor = (status) => {
+        switch (status) {
+            case 'OPEN': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+            case 'COMING_SOON': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-800';
+            case 'CLOSED': return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700';
+            default: return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-400';
         }
     };
 
@@ -248,6 +260,11 @@ const Qualifications = () => {
                                         </div>
                                     )}
                                 </div>
+                                <div className="absolute bottom-4 left-4 right-4 flex gap-2">
+                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border backdrop-blur-md shadow-sm ${getStatusBadgeColor(qual.status)}`}>
+                                        {qual.status?.replace('_', ' ')}
+                                    </span>
+                                </div>
                             </div>
 
                             <div className="p-6 flex flex-col flex-grow">
@@ -277,8 +294,8 @@ const Qualifications = () => {
                                             </span>
                                         </div>
                                     )}
-                                    {qual.duration && (
-                                        <div className="flex items-center"><Clock size={14} className="mr-1.5 text-zinc-400" /> <span className="truncate">{qual.duration}</span></div>
+                                    {qual.startDate && (
+                                        <div className="flex items-center"><Calendar size={14} className="mr-1.5 text-zinc-400" /> <span className="truncate">{new Date(qual.startDate).toLocaleDateString()}</span></div>
                                     )}
                                 </div>
 
@@ -287,12 +304,32 @@ const Qualifications = () => {
                                 </p>
 
                                 {isStudent && (
-                                    <button
-                                        onClick={() => handleEnrollRequest(qual.id)}
-                                        className="mt-auto w-full py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 rounded-lg font-bold transition-colors shadow-md"
-                                    >
-                                        Request Enrollment
-                                    </button>
+                                    <div className="mt-auto space-y-3">
+                                        {qual.status === 'OPEN' ? (
+                                            <button
+                                                onClick={() => handleEnrollRequest(qual.id)}
+                                                className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold transition-colors shadow-md flex items-center justify-center gap-2"
+                                            >
+                                                <CheckCircle2 size={18} />
+                                                Request Enrollment
+                                            </button>
+                                        ) : qual.status === 'COMING_SOON' ? (
+                                            <button
+                                                onClick={() => handleWishlistAdd(qual.id)}
+                                                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-colors shadow-md flex items-center justify-center gap-2"
+                                            >
+                                                <Bell size={18} />
+                                                Add to Wish List
+                                            </button>
+                                        ) : (
+                                            <button
+                                                disabled
+                                                className="w-full py-2.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-400 rounded-lg font-bold cursor-not-allowed"
+                                            >
+                                                Enrollment Closed
+                                            </button>
+                                        )}
+                                    </div>
                                 )}
                                 {!user || user.role === 'GUEST' ? (
                                     <button
@@ -522,6 +559,49 @@ const Qualifications = () => {
                                             <option value="INTERMEDIATE">🟠 Intermediate</option>
                                             <option value="ADVANCED">🔴 Advanced</option>
                                         </select>
+                                    </div>
+                                    <div className="pt-2">
+                                        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Course Availability</label>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {['OPEN', 'COMING_SOON', 'CLOSED'].map((s) => (
+                                                <button
+                                                    key={s}
+                                                    type="button"
+                                                    onClick={() => setFormData({ ...formData, status: s })}
+                                                    className={`py-2 text-xs font-bold rounded-lg border transition-all ${formData.status === s
+                                                        ? 'bg-brand-600 border-brand-600 text-white shadow-md'
+                                                        : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-brand-500'}`}
+                                                >
+                                                    {s.replace('_', ' ')}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Start Date</label>
+                                            <div className="relative">
+                                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                                                <input
+                                                    type="date"
+                                                    value={formData.startDate}
+                                                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-brand-500 outline-none transition-all text-zinc-900 dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">End Date</label>
+                                            <div className="relative">
+                                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                                                <input
+                                                    type="date"
+                                                    value={formData.endDate}
+                                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-brand-500 outline-none transition-all text-zinc-900 dark:text-white"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

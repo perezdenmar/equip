@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings, LayoutTemplate, Palette, Zap, Save, CheckCircle, Loader2, Menu, Award, Eye, EyeOff, Building2, Image, FileUp, Globe } from 'lucide-react';
+import { Settings, LayoutTemplate, Palette, Zap, Save, CheckCircle, Loader2, Menu, Award, Eye, EyeOff, Building2, Image, FileUp, Globe, Bell, Megaphone } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/client.js';
 
 const AdminSettings = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('hero');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -142,7 +144,19 @@ const AdminSettings = () => {
         { id: 'spotlight', label: 'Featured Spotlight', icon: <Award size={20} /> },
         { id: 'contact', label: 'Company Info', icon: <Building2 size={20} /> },
         { id: 'theme', label: 'Theme Config', icon: <Zap size={20} /> },
+        { id: 'notifications', label: 'Notifications', icon: <Bell size={20} /> },
+        { id: 'announcements', label: 'Announcements', icon: <Megaphone size={20} /> },
     ];
+
+    const handleTabClick = (id) => {
+        if (id === 'notifications') {
+            navigate('/admin/notifications');
+        } else if (id === 'announcements') {
+            navigate('/admin/announcements');
+        } else {
+            setActiveTab(id);
+        }
+    };
 
     if (loading) {
         return (
@@ -184,7 +198,7 @@ const AdminSettings = () => {
                         {tabs.map((tab) => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => handleTabClick(tab.id)}
                                 className={`w-full flex items-center px-5 py-4 text-left font-semibold transition-colors
                                     ${activeTab === tab.id
                                         ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border-l-4 border-brand-500'

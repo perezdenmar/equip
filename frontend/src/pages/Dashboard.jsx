@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Award, Clock, Briefcase, FileText, Settings, Users, AlertCircle, Plus, Download, Loader2, ArrowRight } from 'lucide-react';
+import { BookOpen, Award, Clock, Briefcase, FileText, Settings, Users, AlertCircle, Plus, Download, Loader2, ArrowRight, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../api/client.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -265,6 +265,12 @@ const Dashboard = () => {
                                         <div className="font-medium text-zinc-800 dark:text-zinc-200">Manage Users</div>
                                     </Link>
                                 )}
+                                <Link to="/admin/partners" className="w-full flex items-center p-4 bg-zinc-50 dark:bg-zinc-900 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border border-transparent hover:border-brand-500/30 group">
+                                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 rounded-lg mr-4 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                        <Heart size={20} />
+                                    </div>
+                                    <div className="font-medium text-zinc-800 dark:text-zinc-200">Manage Partners</div>
+                                </Link>
                                 <Link to="/staff" className="w-full flex items-center p-4 bg-zinc-50 dark:bg-zinc-900 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border border-transparent hover:border-brand-500/30 group">
                                     <div className="p-2 bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-lg mr-4 group-hover:bg-amber-600 group-hover:text-white transition-colors">
                                         <Briefcase size={20} />

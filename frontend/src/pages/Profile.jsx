@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User, FileText, UploadCloud, Trash2, File, Loader2, Save, Camera, Link as LinkIcon, Facebook, AlertCircle, RefreshCw } from 'lucide-react';
+import { User, FileText, UploadCloud, Trash2, File, Loader2, Save, Camera, Link as LinkIcon, Facebook, AlertCircle, RefreshCw, Trophy, Users, Send, Gift } from 'lucide-react';
 import { regions, provinces, citiesMunicipalities } from '../utils/phLocations';
 import ImageCropperModal from '../components/ImageCropperModal';
 import api from '../api/client.js';
@@ -61,9 +61,16 @@ const Profile = () => {
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
 
+    // Gamification state
+    const [pointsData, setPointsData] = useState({ balance: 0, transactions: [] });
+    const [referrals, setReferrals] = useState([]);
+    const [referralEmail, setReferralEmail] = useState('');
+    const [isReferring, setIsReferring] = useState(false);
+
     useEffect(() => {
         fetchProfile();
         fetchDocuments();
+        fetchGamificationData();
     }, []);
 
     const fetchProfile = async () => {
@@ -113,6 +120,37 @@ const Profile = () => {
             console.error('Failed to load documents', err);
         } finally {
             setDocLoading(false);
+        }
+    };
+
+    const fetchGamificationData = async () => {
+        try {
+            const [pointsRes, referralsRes] = await Promise.all([
+                api.get('/points/balance'),
+                api.get('/referrals')
+            ]);
+            setPointsData(pointsRes.data);
+            setReferrals(referralsRes.data);
+        } catch (err) {
+            console.error('Failed to load gamification data', err);
+        }
+    };
+
+    const handleInviteFriend = async (e) => {
+        e.preventDefault();
+        if (!referralEmail) return;
+
+        setIsReferring(true);
+        try {
+            await api.post('/referrals', { email: referralEmail });
+            setSuccessMessage(`Invitation sent to ${referralEmail}!`);
+            setReferralEmail('');
+            fetchGamificationData();
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } catch (err) {
+            setError(err.response?.data?.error || 'Failed to send invitation.');
+        } finally {
+            setIsReferring(false);
         }
     };
 
@@ -351,6 +389,67 @@ const Profile = () => {
                             </p>
                         </div>
                     </div>
+
+                    {/* Gamification Card - Students Only */}
+                    {storedUser?.role === 'STUDENT' && (
+                        <div className="glass-effect rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-brand-50 to-white dark:from-brand-900/10 dark:to-zinc-900">
+                            <div className="flex justify-between items-start mb-4">
+                                <h3 className="font-bold text-zinc-900 dark:text-white flex items-center text-sm">
+                                    <Trophy className="mr-2 text-amber-500" size={16} /> My Rewards
+                                </h3>
+                                <span className="text-2xl font-black text-brand-600 dark:text-brand-400">{pointsData.balance}</span>
+                            </div>
+                            <p className="text-[10px] text-zinc-500 mb-4 font-medium uppercase tracking-wider">Accumulated Points</p>
+                            <a href="/rewards" className="flex items-center justify-center w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-all shadow-md gap-2">
+                                <Gift size={14} /> Redeem Points
+                            </a>
+                        </div>
+                    )}
+
+                    {/* Refer a Friend Card - Students Only */}
+                    {storedUser?.role === 'STUDENT' && (
+                        <div className="glass-effect rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800">
+                            <h3 className="font-bold mb-4 text-zinc-900 dark:text-white flex items-center text-sm">
+                                <Users className="mr-2 text-brand-500" size={16} /> Refer a Friend
+                            </h3>
+                            <p className="text-[10px] text-zinc-500 mb-4 leading-relaxed">
+                                Earn <span className="text-brand-600 font-bold">50 points</span> for every friend who joins!
+                            </p>
+                            <form onSubmit={handleInviteFriend} className="space-y-3">
+                                <input
+                                    type="email"
+                                    value={referralEmail}
+                                    onChange={(e) => setReferralEmail(e.target.value)}
+                                    placeholder="Friend's email"
+                                    className="w-full px-3 py-2 text-xs rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isReferring || !referralEmail}
+                                    className="w-full py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 rounded-lg text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {isReferring ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                                    Send Invite
+                                </button>
+                            </form>
+
+                            {referrals.length > 0 && (
+                                <div className="mt-6 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                                    <p className="text-[10px] text-zinc-400 font-bold uppercase mb-2">Recent Referrals</p>
+                                    <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+                                        {referrals.map(ref => (
+                                            <div key={ref.id} className="flex justify-between items-center text-[10px] p-2 bg-zinc-50 dark:bg-zinc-900 rounded">
+                                                <span className="truncate w-2/3 text-zinc-600 dark:text-zinc-400">{ref.refereeEmail}</span>
+                                                <span className={`font-bold ${ref.status === 'COMPLETED' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                                                    {ref.status}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Quick Documents Upload inline */}
                     <div className="glass-effect rounded-2xl p-6 border border-zinc-200 dark:border-zinc-800">

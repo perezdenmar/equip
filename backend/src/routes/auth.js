@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { sendOtpEmail } from '../services/emailService.js';
+import { notifyNewStudentRegistration } from '../services/notificationService.js';
 import prisma from '../lib/prisma.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { STRICT_ADMINS, JWT_EXPIRY } from '../lib/config.js';
@@ -55,9 +56,59 @@ router.post('/verify-otp', otpVerifyLimiter, async (req, res) => {
         if (!user) {
             // Auto-register: assign ADMIN only if in strict list
             const assignedRole = STRICT_ADMINS.includes(email.toLowerCase()) ? 'ADMIN' : 'STUDENT';
-            user = await prisma.user.create({
-                data: { email, role: assignedRole }
+
+            // Start a transaction to handle user creation and referral rewards
+            user = await prisma.$transaction(async (tx) => {
+                const newUser = await tx.user.create({
+                    data: { email, role: assignedRole }
+                });
+
+                // Check if this user was referred
+                const referral = await tx.referral.findFirst({
+                    where: { refereeEmail: email, status: 'PENDING' }
+                });
+
+                if (referral) {
+                    // Update referral status
+                    await tx.referral.update({
+                        where: { id: referral.id },
+                        data: { status: 'COMPLETED' }
+                    });
+
+                    // Award points to referrer (50 points)
+                    await tx.user.update({
+                        where: { id: referral.referrerId },
+                        data: { points: { increment: 50 } }
+                    });
+
+                    // Record transaction
+                    await tx.pointsTransaction.create({
+                        data: {
+                            userId: referral.referrerId,
+                            amount: 50,
+                            reason: `Referral bonus for ${email}`,
+                            type: 'ACCRUAL'
+                        }
+                    });
+
+                    // Notify referrer
+                    await tx.notification.create({
+                        data: {
+                            userId: referral.referrerId,
+                            title: 'Referral Points Earned!',
+                            message: `You earned 50 points because ${email} joined equip!`,
+                            type: 'SUCCESS'
+                        }
+                    });
+                }
+
+                return newUser;
             });
+
+            // Notify Admins/Staff about new registration
+            if (assignedRole === 'STUDENT') {
+                notifyNewStudentRegistration(user).catch(err => console.error('Registration notification failed:', err));
+            }
         } else {
             // If an existing user's email is not in the strict list but they are ADMIN, demote them
             if (user.role === 'ADMIN' && !STRICT_ADMINS.includes(email.toLowerCase())) {

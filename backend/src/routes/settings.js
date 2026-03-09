@@ -125,4 +125,43 @@ router.put('/', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => 
     }
 });
 
+// Update specialized notification settings (Admin Only)
+router.put('/notifications', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+    try {
+        const config = req.body;
+        const key = 'notification_config';
+
+        // Basic validation
+        if (!config || typeof config !== 'object') {
+            return res.status(400).json({ error: 'Config must be a valid JSON object' });
+        }
+
+        // Fetch current for logging
+        const current = await prisma.siteSetting.findUnique({ where: { key } });
+
+        const updatedSetting = await prisma.siteSetting.upsert({
+            where: { key },
+            update: { value: config },
+            create: { key, value: config }
+        });
+
+        // Audit Log
+        await prisma.auditLog.create({
+            data: {
+                userId: req.user.userId,
+                action: 'UPDATE_NOTIFICATION_CONFIG',
+                details: `Updated notification configuration. Changes: ${JSON.stringify({
+                    from: current ? current.value : {},
+                    to: config
+                })}`
+            }
+        });
+
+        res.json(updatedSetting);
+    } catch (error) {
+        console.error('Error updating notification config:', error);
+        res.status(500).json({ error: 'Failed to update notification configuration' });
+    }
+});
+
 export default router;

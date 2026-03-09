@@ -7,6 +7,218 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  role               Role                @default(STUDENT)
+  studentStatus      StudentStatus       @default(POOL)
+  firstName          String?
+  middleName         String?
+  lastName           String?
+  extensionName      String?
+  birthplaceRegion   String?
+  birthplaceProvince String?
+  birthplaceCity     String?
+  birthplaceDistrict String?
+  dateOfBirth        DateTime?
+  sex                String?
+  nationality        String?
+  contact            String?
+  telephoneNumber    String?
+  socials            Json?
+  street             String?
+  barangay           String?
+  district           String?
+  city               String?
+  province           String?
+  region             String?
+  parentName         String?
+  parentAddress      String?
+  rsbsaNumber        String?
+  farmerName         String?
+  farmerRelationship String?
+  privacyConsent     Boolean             @default(false)
+  profilePhoto       String?
+  bio                String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  isTrainer          Boolean             @default(false)
+  points             Int                 @default(0)
+  auditLogs          AuditLog[]
+  documents          Document[]
+  enrollments        Enrollment[]
+  notifications      Notification[]
+  pointsTransactions PointsTransaction[]
+  referrals          Referral[]          @relation("Referrer")
+  wishlist           Wishlist[]
+  assignedCourses    Qualification[]     @relation("CourseTrainers")
+  authoredAnnouncements Announcement[]   @relation("AnnouncementAuthor")
+  receivedAnnouncements AnnouncementRecipient[]
+
+  @@index([role])
+  @@index([studentStatus])
+  @@index([createdAt])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  userId       String
+  filename     String
+  filepath     String
+  documentType String?
+  uploadedAt   DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OfficialQualification {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  title      String
+  descriptor String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Qualification {
+  id          String              @id @default(uuid())
+  title       String
+  description String?
+  code        String              @unique
+  duration    String?
+  level       DifficultyLevel?
+  category    String?
+  coverImage  String?
+  syllabus    String[]
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  endDate     DateTime?
+  startDate   DateTime?
+  status      QualificationStatus @default(COMING_SOON)
+  enrollments Enrollment[]
+  wishlist    Wishlist[]
+  trainers    User[]              @relation("CourseTrainers")
+}
+
+model Wishlist {
+  id              String        @id @default(uuid())
+  userId          String
+  qualificationId String
+  createdAt       DateTime      @default(now())
+  qualification   Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, qualificationId])
+}
+
+model PointsTransaction {
+  id        String          @id @default(uuid())
+  userId    String
+  amount    Int
+  reason    String
+  type      TransactionType @default(ACCRUAL)
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Referral {
+  id           String         @id @default(uuid())
+  referrerId   String
+  refereeEmail String
+  status       ReferralStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  referrer     User           @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  @@unique([referrerId, refereeEmail])
+}
+
+model Enrollment {
+  id              String           @id @default(uuid())
+  userId          String
+  qualificationId String
+  status          EnrollmentStatus @default(PENDING)
+  requestedAt     DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  qualification   Qualification    @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, qualificationId])
+}
+
+model Partner {
+  id          String          @id @default(uuid())
+  name        String
+  logo        String?
+  contact     String?
+  email       String?
+  socials     Json?
+  description String?
+  website     String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt
+  rewards     PartnerReward[]
+}
+
+model PartnerReward {
+  id          String   @id @default(uuid())
+  partnerId   String
+  title       String
+  description String?
+  points      Int
+  category    String?
+  image       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id             String   @id @default(uuid())
+  title          String
+  company        String
+  description    String?
+  location       String?
+  salary         String?
+  skillsRequired String[]
+  url            String?
+  sourceApiId    String?  @unique
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SiteSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
 enum Role {
   STUDENT
   STAFF
@@ -28,76 +240,20 @@ enum StudentStatus {
   DEBARRED
 }
 
-model User {
-  id           String       @id @default(uuid())
-  email        String       @unique
-  role         Role         @default(STUDENT)
-  isTrainer    Boolean      @default(false)
-  studentStatus StudentStatus @default(POOL)
-  firstName    String?
-  middleName   String?
-  lastName     String?
-  extensionName String?
-  
-  // Birthplace & Demographics
-  birthplaceRegion     String?
-  birthplaceProvince   String?
-  birthplaceCity       String?
-  birthplaceDistrict   String?
-  dateOfBirth          DateTime?
-  sex                  String?
-  nationality          String?
-
-  // Contact Info
-  contact              String?      // Repurposed as Mobile Number
-  telephoneNumber      String?
-  socials              Json?
-
-  // Permanent Mailing Address
-  street               String?
-  barangay             String?
-  district             String?
-  city                 String?
-  province             String?
-  region               String?
-
-  // Parents / Guardian
-  parentName           String?
-  parentAddress        String?
-
-  // Farmer/Beneficiaries
-  rsbsaNumber          String?
-  farmerName           String?
-  farmerRelationship   String?
-
-  // Consent
-  privacyConsent       Boolean      @default(false)
-
-  profilePhoto String?
-  bio          String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  enrollments  Enrollment[]
-  auditLogs    AuditLog[]
-  documents    Document[]
-  assignedCourses Qualification[] @relation("CourseTrainers")
-  notifications   Notification[]
-
-  @@index([role])
-  @@index([studentStatus])
-  @@index([createdAt])
+enum QualificationStatus {
+  OPEN
+  COMING_SOON
+  CLOSED
 }
 
-model Document {
-  id          String   @id @default(uuid())
-  userId      String
-  filename    String
-  filepath    String
-  documentType String? 
-  uploadedAt  DateTime @default(now())
+enum TransactionType {
+  ACCRUAL
+  REDEMPTION
+}
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum ReferralStatus {
+  PENDING
+  COMPLETED
 }
 
 enum DifficultyLevel {
@@ -105,90 +261,43 @@ enum DifficultyLevel {
   INTERMEDIATE
   ADVANCED
 }
-
-model OfficialQualification {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  title       String
-  descriptor  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  FAILED
 }
 
-model Qualification {
-  id          String         @id @default(uuid())
-  title       String
-  description String?
-  code        String         @unique
-  duration    String?
-  level       DifficultyLevel?
-  category    String?
-  coverImage  String?
-  syllabus    String[]       // Array of syllabus items
-  trainers    User[]         @relation("CourseTrainers")
-  isActive    Boolean        @default(true)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+model Announcement {
+  id             String                 @id @default(uuid())
+  title          String
+  subject        String?
+  content        String
+  ctaLink        String?
+  targetCriteria Json                   // { roles: [], locations: [], qualificationIds: [] }
+  channels       Json                   // { inApp: boolean, email: boolean }
+  status         AnnouncementStatus     @default(DRAFT)
+  priority       Boolean                @default(false)
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  authorId       String
+  author         User                   @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  recipients     AnnouncementRecipient[]
 
-  enrollments Enrollment[]
+  @@index([status])
+  @@index([scheduledAt])
 }
 
-model Enrollment {
-  id              String           @id @default(uuid())
-  userId          String
-  qualificationId String
-  status          EnrollmentStatus @default(PENDING)
-  requestedAt     DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+model AnnouncementRecipient {
+  id             String       @id @default(uuid())
+  announcementId String
+  userId         String
+  sentAt         DateTime     @default(now())
+  isRead         Boolean      @default(false)
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  qualification   Qualification    @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
-  
-  @@unique([userId, qualificationId])
-}
-
-model Job {
-  id              String   @id @default(uuid())
-  title           String
-  company         String
-  description     String?
-  location        String?
-  salary          String?
-  skillsRequired  String[]
-  url             String?
-  sourceApiId     String?  @unique
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-}
-
-model AuditLog {
-  id          String   @id @default(uuid())
-  userId      String
-  action      String
-  details     String?
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  type      String   @default("INFO") // e.g., 'INFO', 'SUCCESS', 'WARNING', 'ERROR'
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([createdAt])
-}
-
-model SiteSetting {
-  key       String   @id // e.g., 'landing_hero', 'landing_categories', 'theme_config'
-  value     Json
-  updatedAt DateTime @updatedAt
+  @@unique([announcementId, userId])
 }

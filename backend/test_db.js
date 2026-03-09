@@ -7,7 +7,7 @@ async function checkTables() {
         host: 'localhost',
         database: 'equip_db',
         password: '1313',
-        port: 5433,
+        port: 5432,
     });
 
     try {
