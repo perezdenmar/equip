@@ -85,6 +85,41 @@ The platform is a modern web application structured as a monorepo with distinct 
 3.  **Sentiment Analysis on Feedback:**
     -   Analyze course reviews or contact forms using NLP to gauge student satisfaction automatically.
 
+### 5.4 Dynamic Job Aggregation Mechanisms
+
+**Objective:** Ensure the `/jobs` page always displays fresh, relevant vocational and technical jobs daily without relying solely on static or mock data.
+
+**Current State Analysis:**
+Currently, `backend/src/services/syncScheduler.js` uses `node-cron` to fetch data daily at midnight, and `cacheService.js` stores this in-memory. However, the data sources (`jobAggregator.js`) rely heavily on generic API calls (Remotive, OpenWebNinja) and hardcoded simulated data for local Philippine jobs (PhilJobNet).
+
+**Recommendations for True Dynamic Aggregation:**
+
+1.  **Database Persistence over In-Memory Cache:**
+    -   *Current:* The in-memory cache resets on server restart, leading to potential data loss or API rate limit hits on boot.
+    -   *Recommendation:* Introduce a `JobListing` table in Prisma. The daily cron job should fetch new jobs, deduplicate them against the database (using external IDs or URL hashes), and insert the fresh ones. This allows for historical data analysis and pagination.
+
+2.  **API Integration Expansion:**
+    -   *Action:* Integrate with robust, dedicated job board APIs that offer Philippine and technical/vocational specific filters (e.g., Jobstreet API if accessible, LinkedIn API via specialized partnerships).
+    -   *Pros:* Clean data, structured JSON, minimal maintenance.
+    -   *Cons:* Can be expensive or have strict rate limits/access hurdles.
+
+3.  **Web Scraping (Playwright/Puppeteer):**
+    -   *Action:* For vital local boards lacking APIs (like the actual PhilJobNet or specialized TESDA job boards), implement a headless browser scraper using Playwright.
+    -   *Mechanism:* A secondary cron job runs weekly or daily, navigates to target sites, extracts HTML elements (Title, Company, Location, Salary), formats them to the standard schema, and inserts them into the database.
+    -   *Pros:* Access to data not available via public APIs.
+    -   *Cons:* Fragile (breaks when website UI changes), slower execution, potential legal/TOS issues (respect `robots.txt` and implement rate limiting/delays).
+
+4.  **RSS/XML Feed Parsing:**
+    -   *Action:* Many job boards and corporate career pages provide RSS or XML feeds of their latest postings. Use a library like `rss-parser`.
+    -   *Mechanism:* The daily cron job iterates through a curated list of feed URLs, parses the new items, and ingests them.
+    -   *Pros:* Extremely lightweight, standardized format, very reliable.
+    -   *Cons:* Limited to sites that explicitly offer RSS feeds.
+
+**Strategic Implementation Path for Jobs:**
+Phase 1: Migrate from in-memory cache to PostgreSQL persistence for jobs to ensure stability.
+Phase 2: Implement RSS parsing for easy, lightweight ingestion of generic job boards.
+Phase 3: Develop targeted Playwright scrapers specifically for high-value, local technical/vocational job sites that lack APIs or RSS feeds.
+
 ## 6. Conclusion
 
-The EQUIP platform possesses a solid, modern foundation. The immediate priority should be establishing a testing framework. Subsequently, implementing the Calendar scheduling and expanding the AI/NLP capabilities will significantly elevate the platform's value proposition for both students and trainers.
+The EQUIP platform possesses a solid, modern foundation. The immediate priority should be establishing a testing framework and migrating job caching to persistent storage. Subsequently, implementing the Calendar scheduling and expanding the AI/NLP capabilities will significantly elevate the platform's value proposition for both students and trainers.
