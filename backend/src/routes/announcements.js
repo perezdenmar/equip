@@ -55,6 +55,38 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN'), async (req, res) =>
     }
 });
 
+// Update announcement (Admin Only)
+router.put('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, subject, content, ctaLink, targetCriteria, channels, scheduledAt, priority } = req.body;
+
+        const announcement = await prisma.announcement.findUnique({ where: { id } });
+        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
+        if (announcement.status === 'SENT') return res.status(400).json({ error: 'Cannot edit sent announcements' });
+
+        const updated = await prisma.announcement.update({
+            where: { id },
+            data: {
+                title,
+                subject,
+                content,
+                ctaLink,
+                targetCriteria,
+                channels,
+                priority: !!priority,
+                scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+                status: scheduledAt ? 'SCHEDULED' : 'DRAFT'
+            }
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error('Update announcement error:', error);
+        res.status(500).json({ error: 'Failed to update announcement' });
+    }
+});
+
 // Delete announcement (Admin Only)
 router.delete('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
     try {

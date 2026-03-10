@@ -5,15 +5,23 @@ import {
     Send, Save, Eye, EyeOff, Users, Mail, Bell,
     Filter, Calendar, ChevronRight, ChevronLeft,
     ExternalLink, AlertTriangle, Loader2, ArrowLeft,
-    CheckCircle
+    CheckCircle, Megaphone
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/client.js';
 
 const AnnouncementCreate = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+
+    // Parse edit parameter from URL
+    const queryParams = new URLSearchParams(location.search);
+    const editId = queryParams.get('edit');
+    const isEditing = !!editId;
+
     const [step, setStep] = useState(1);
     const [saving, setSaving] = useState(false);
+    const [fetching, setFetching] = useState(isEditing);
     const [targetCount, setTargetCount] = useState(0);
     const [loadingCount, setLoadingCount] = useState(false);
 
@@ -33,11 +41,43 @@ const AnnouncementCreate = () => {
     });
 
     useEffect(() => {
+        if (isEditing) {
+            fetchExistingAnnouncement();
+        }
+    }, [editId]);
+
+    const fetchExistingAnnouncement = async () => {
+        setFetching(true);
+        try {
+            const res = await api.get(`/announcements/${editId}`);
+            const ann = res.data;
+
+            // Map backend data to form state
+            setFormData({
+                title: ann.title || '',
+                subject: ann.subject || '',
+                content: ann.content || '',
+                ctaLink: ann.ctaLink || '',
+                priority: !!ann.priority,
+                channels: ann.channels || { inApp: true, email: true },
+                targetCriteria: ann.targetCriteria || { roles: [], locations: [], qualificationIds: [] },
+                scheduledAt: ann.scheduledAt ? new Date(ann.scheduledAt).toISOString().slice(0, 16) : ''
+            });
+        } catch (error) {
+            console.error('Failed to fetch announcement for editing', error);
+            alert('Could not load announcement data. It may have been deleted.');
+            navigate('/admin/announcements');
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    useEffect(() => {
         const timer = setTimeout(() => {
-            fetchTargetCount();
+            if (!fetching) fetchTargetCount();
         }, 500);
         return () => clearTimeout(timer);
-    }, [formData.targetCriteria]);
+    }, [formData.targetCriteria, fetching]);
 
     const fetchTargetCount = async () => {
         setLoadingCount(true);
@@ -90,11 +130,15 @@ const AnnouncementCreate = () => {
 
         setSaving(true);
         try {
-            await api.post('/announcements', formData);
+            if (isEditing) {
+                await api.put(`/announcements/${editId}`, formData);
+            } else {
+                await api.post('/announcements', formData);
+            }
             navigate('/admin/announcements');
         } catch (error) {
             console.error('Failed to save announcement', error);
-            alert('Failed to create announcement.');
+            alert(`Failed to ${isEditing ? 'update' : 'create'} announcement.`);
         } finally {
             setSaving(false);
         }
@@ -112,9 +156,15 @@ const AnnouncementCreate = () => {
 
         setSaving(true);
         try {
-            // 1. Create as draft
-            const res = await api.post('/announcements', { ...formData, scheduledAt: null });
-            const annId = res.data.id;
+            let annId = editId;
+
+            // 1. Save changes first
+            if (isEditing) {
+                await api.put(`/announcements/${editId}`, { ...formData, scheduledAt: null });
+            } else {
+                const res = await api.post('/announcements', { ...formData, scheduledAt: null });
+                annId = res.data.id;
+            }
 
             // 2. Trigger send
             await api.post(`/announcements/${annId}/send`);
@@ -128,11 +178,20 @@ const AnnouncementCreate = () => {
         }
     };
 
+    if (fetching) {
+        return (
+            <div className="flex flex-col items-center justify-center h-96">
+                <Loader2 className="animate-spin text-brand-600 mb-4" size={48} />
+                <p className="text-zinc-500 font-medium font-display uppercase tracking-widest text-xs">Loading Draft Data...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
                 <div>
-                    <div className="flex gap-4 mb-4">
+                    <div className="flex flex-wrap gap-4 mb-4">
                         <button
                             onClick={() => navigate('/admin/announcements')}
                             className="flex items-center text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
@@ -146,13 +205,18 @@ const AnnouncementCreate = () => {
                             <ChevronLeft size={18} className="mr-1" /> Back to CMS Settings
                         </button>
                     </div>
-                    <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white">Create New Announcement</h1>
-                    <p className="text-zinc-500 dark:text-zinc-400">Compose your message and define target recipients.</p>
+                    <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white flex items-center gap-3">
+                        <Megaphone className="text-brand-500" size={32} />
+                        {isEditing ? 'Edit Announcement Draft' : 'Create New Announcement'}
+                    </h1>
+                    <p className="text-zinc-500 dark:text-zinc-400">
+                        {isEditing ? 'Refine your existing message and targeting rules.' : 'Compose your message and define target recipients.'}
+                    </p>
                 </div>
             </div>
 
             {/* Stepper */}
-            <div className="flex items-center justify-between mb-10 bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <div className="flex items-center justify-between mb-10 bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm relative z-10">
                 {[1, 2, 3].map((s) => (
                     <div key={s} className="flex items-center flex-1 last:flex-none">
                         <div className={`flex items-center justify-center w-10 h-10 rounded-full font-bold transition-colors ${step >= s ? 'bg-brand-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}>
@@ -166,12 +230,12 @@ const AnnouncementCreate = () => {
                 ))}
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl shadow-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden text-left relative z-10">
                 <div className="p-8">
                     {/* STEP 1: CONTENT */}
                     {step === 1 && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Announcement Title (Admin Ref) <span className="text-red-500">*</span></label>
                                     <input
@@ -403,7 +467,7 @@ const AnnouncementCreate = () => {
                                 {saving ? (
                                     <><Loader2 className="animate-spin mr-2" /> Processing...</>
                                 ) : (
-                                    <><Save className="mr-2" size={20} /> {formData.scheduledAt ? 'Schedule Blast' : 'Save as Draft'}</>
+                                    <><Save className="mr-2" size={20} /> {formData.scheduledAt ? (isEditing ? 'Update Schedule' : 'Schedule Blast') : (isEditing ? 'Save Changes' : 'Save as Draft')}</>
                                 )}
                             </button>
                         )}
