@@ -78,6 +78,7 @@ const AnnouncementReport = () => {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                {/* ... existing stats ... */}
                 <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
                     <div className="flex items-center justify-between mb-2">
                         <div className="p-2 bg-brand-100 dark:bg-brand-900/30 rounded-lg text-brand-600">
@@ -123,6 +124,34 @@ const AnnouncementReport = () => {
                         {report.channels.inApp && <Bell className="text-blue-500" size={24} />}
                     </div>
                     <div className="text-xs text-zinc-500 mt-2">Targeted Channels</div>
+                </div>
+            </div>
+
+            {/* Message Content Preview */}
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden mb-10">
+                <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
+                    <h2 className="font-bold text-zinc-900 dark:text-white text-lg">Message Content</h2>
+                </div>
+                <div className="p-8">
+                    <div className="mb-6">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Subject Line</label>
+                        <div className="text-lg font-bold text-zinc-900 dark:text-white">{report.subject || 'No Subject'}</div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Announcement Body</label>
+                        <div
+                            className="prose dark:prose-invert max-w-none bg-zinc-50 dark:bg-zinc-800/50 p-6 rounded-2xl border border-zinc-100 dark:border-zinc-700"
+                            dangerouslySetInnerHTML={{ __html: report.content }}
+                        />
+                    </div>
+                    {report.ctaLink && (
+                        <div className="mt-6">
+                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Call to Action Link</label>
+                            <a href={report.ctaLink} target="_blank" rel="noopener noreferrer" className="text-brand-500 font-bold hover:underline">
+                                {report.ctaLink}
+                            </a>
+                        </div>
+                    )}
                 </div>
             </div>
 
