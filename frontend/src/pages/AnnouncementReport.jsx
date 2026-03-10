@@ -46,7 +46,7 @@ const AnnouncementReport = () => {
     }
 
     const filteredRecipients = report.recipients.filter(r =>
-        r.user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        `${r.user.firstName || ''} ${r.user.lastName || ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -162,7 +162,9 @@ const AnnouncementReport = () => {
                                 filteredRecipients.map((rec) => (
                                     <tr key={rec.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div className="font-bold text-zinc-900 dark:text-white">{rec.user.name}</div>
+                                            <div className="font-bold text-zinc-900 dark:text-white">
+                                                {rec.user.firstName} {rec.user.lastName}
+                                            </div>
                                             <div className="text-xs text-zinc-500">{rec.user.email}</div>
                                         </td>
                                         <td className="px-6 py-4">

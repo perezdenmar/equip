@@ -148,7 +148,8 @@ router.get('/:id/report', authenticateToken, authorizeRoles('ADMIN'), async (req
                         user: {
                             select: {
                                 id: true,
-                                name: true,
+                                firstName: true,
+                                lastName: true,
                                 email: true,
                                 role: true,
                                 location: true
