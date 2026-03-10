@@ -11,6 +11,8 @@ const Announcements = () => {
     const navigate = useNavigate();
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [sendingId, setSendingId] = useState(null);
+    const [notification, setNotification] = useState(null); // { type: 'success' | 'error', message: string }
 
     useEffect(() => {
         fetchAnnouncements();
@@ -50,10 +52,31 @@ const Announcements = () => {
 
         try {
             await api.delete(`/announcements/${ann.id}`);
+            setNotification({ type: 'success', message: 'Announcement deleted successfully.' });
+            setTimeout(() => setNotification(null), 5000);
             fetchAnnouncements();
         } catch (error) {
             console.error('Failed to delete announcement', error);
-            alert('Failed to delete announcement.');
+            setNotification({ type: 'error', message: 'Failed to delete announcement.' });
+            setTimeout(() => setNotification(null), 5000);
+        }
+    };
+
+    const handleSendNow = async (ann) => {
+        if (!window.confirm(`Are you sure you want to send "${ann.title}" to all recipients immediately?`)) return;
+
+        setSendingId(ann.id);
+        try {
+            await api.post(`/announcements/${ann.id}/send`);
+            setNotification({ type: 'success', message: `Delivery started for "${ann.title}"! Metrics will update shortly.` });
+            setTimeout(() => setNotification(null), 5000);
+            fetchAnnouncements();
+        } catch (error) {
+            console.error('Failed to trigger delivery', error);
+            setNotification({ type: 'error', message: 'Failed to trigger delivery. Please try again.' });
+            setTimeout(() => setNotification(null), 5000);
+        } finally {
+            setSendingId(null);
         }
     };
 
@@ -71,11 +94,11 @@ const Announcements = () => {
                     >
                         <ChevronLeft size={18} className="mr-1" /> Back to CMS Settings
                     </button>
-                    <h1 className="text-3xl md:text-4xl font-display font-bold text-zinc-900 dark:text-white mb-2 flex items-center">
+                    <h1 className="text-3xl md:text-4xl font-display font-bold text-zinc-900 dark:text-white mb-2 flex items-center text-left">
                         <Megaphone className="mr-3 text-brand-500" size={36} />
                         Announcements
                     </h1>
-                    <p className="text-zinc-500 dark:text-zinc-400">Send blast emails and in-app notifications to targeted user segments.</p>
+                    <p className="text-zinc-500 dark:text-zinc-400 text-left">Send blast emails and in-app notifications to targeted user segments.</p>
                 </div>
                 <button
                     onClick={() => navigate('/admin/announcements/create')}
@@ -84,6 +107,18 @@ const Announcements = () => {
                     <Plus className="mr-2" size={20} /> Create Announcement
                 </button>
             </div>
+
+            {/* Floating Notification */}
+            {notification && (
+                <div className={`fixed top-6 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl border ${notification.type === 'success'
+                        ? 'bg-green-600 border-green-500 text-white'
+                        : 'bg-red-600 border-red-500 text-white'
+                    }`}>
+                    {notification.type === 'success' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
+                    <p className="font-bold text-sm tracking-wide">{notification.message}</p>
+                    <button onClick={() => setNotification(null)} className="ml-2 hover:bg-white/20 p-1 rounded-full"><Plus className="rotate-45" size={16} /></button>
+                </div>
+            )}
 
             <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -156,8 +191,17 @@ const Announcements = () => {
                                                     </button>
                                                 )}
                                                 {ann.status === 'DRAFT' && (
-                                                    <button onClick={() => api.post(`/announcements/${ann.id}/send`).then(fetchAnnouncements)} className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-green-500 transition-colors" title="Send Now">
-                                                        <Send size={18} />
+                                                    <button
+                                                        onClick={() => handleSendNow(ann)}
+                                                        disabled={sendingId === ann.id}
+                                                        className={`p-2 rounded-lg transition-colors ${sendingId === ann.id ? 'opacity-50' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-green-500'}`}
+                                                        title="Send Now"
+                                                    >
+                                                        {sendingId === ann.id ? (
+                                                            <div className="animate-spin h-5 w-5 border-2 border-green-500 border-t-transparent rounded-full" />
+                                                        ) : (
+                                                            <Send size={18} />
+                                                        )}
                                                     </button>
                                                 )}
                                                 <button
