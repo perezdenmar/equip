@@ -108,13 +108,7 @@ const Announcements = () => {
                                     <tr key={ann.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                                         <td className="px-6 py-4">
                                             <div
-                                                onClick={() => {
-                                                    if (ann.status === 'SENT') {
-                                                        navigate(`/admin/announcements/${ann.id}/report`);
-                                                    } else {
-                                                        navigate(`/admin/announcements/create?edit=${ann.id}`);
-                                                    }
-                                                }}
+                                                onClick={() => navigate(`/admin/announcements/${ann.id}/report?tab=content`)}
                                                 className="font-bold text-zinc-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer hover:underline transition-all"
                                             >
                                                 {ann.title}
@@ -146,9 +140,9 @@ const Announcements = () => {
                                             <div className="flex justify-end gap-2">
                                                 {ann.status === 'SENT' ? (
                                                     <button
-                                                        onClick={() => navigate(`/admin/announcements/${ann.id}/report`)}
+                                                        onClick={() => navigate(`/admin/announcements/${ann.id}/report?tab=metrics`)}
                                                         className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-brand-500 transition-colors"
-                                                        title="View Report"
+                                                        title="View Delivery Metrics"
                                                     >
                                                         <BarChart3 size={18} />
                                                     </button>

@@ -133,6 +133,27 @@ router.post('/count-targets', authenticateToken, authorizeRoles('ADMIN'), async 
     }
 });
 
+// Get basic detail (Admin Only) - Fast & Robust fallback
+router.get('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const announcement = await prisma.announcement.findUnique({
+            where: { id },
+            include: {
+                _count: {
+                    select: { recipients: true }
+                }
+            }
+        });
+
+        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
+        res.json(announcement);
+    } catch (error) {
+        console.error('Fetch announcement detail error:', error);
+        res.status(500).json({ error: 'Failed to fetch announcement details' });
+    }
+});
+
 // Get detailed report (Admin Only)
 router.get('/:id/report', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
     try {
