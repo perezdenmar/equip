@@ -1,16 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config();
 console.log('[Debug] Importing modules...');
+import fs from 'fs';
+fs.writeFileSync('boot.log', 'Server started at ' + new Date().toISOString() + '\n');
 console.log('[Debug] Importing express...');
 import express from 'express';
 console.log('[Debug] Importing cors...');
 import cors from 'cors';
 console.log('[Debug] Importing helmet...');
 import helmet from 'helmet';
-console.log('[Debug] Importing dotenv...');
-import dotenv from 'dotenv';
 console.log('[Debug] Importing path...');
 import path from 'path';
-console.log('[Debug] Importing fs...');
-import fs from 'fs';
 console.log('[Debug] Importing prisma...');
 import prisma from './lib/prisma.js';
 console.log('[Debug] Importing authRoutes...');
@@ -51,8 +51,7 @@ import announcementRoutes from './routes/announcements.js';
 console.log('[Debug] Importing initializeScheduler...');
 import { initializeScheduler } from './services/syncScheduler.js';
 
-console.log('[Debug] All modules imported. Running dotenv.config()...');
-dotenv.config();
+console.log('[Debug] All modules imported. Initializing app...');
 
 console.log('[Debug] Initializing Express app...');
 const app = express();

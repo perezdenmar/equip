@@ -48,12 +48,16 @@ function App() {
                         <Route path="trainers" element={<Trainers />} />
                         <Route path="students" element={<Students />} />
                         <Route path="staff" element={<StaffManagement />} />
-                        <Route path="admin/partners" element={<ManagePartners />} />
-                        <Route path="admin/settings" element={<AdminSettings />} />
-                        <Route path="admin/notifications" element={<NotificationDashboard />} />
-                        <Route path="admin/announcements" element={<Announcements />} />
-                        <Route path="admin/announcements/create" element={<AnnouncementCreate />} />
-                        <Route path="admin/announcements/:id/report" element={<AnnouncementReport />} />
+                        
+                        {/* Admin Only Routes */}
+                        <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+                            <Route path="admin/partners" element={<ManagePartners />} />
+                            <Route path="admin/settings" element={<AdminSettings />} />
+                            <Route path="admin/notifications" element={<NotificationDashboard />} />
+                            <Route path="admin/announcements" element={<Announcements />} />
+                            <Route path="admin/announcements/create" element={<AnnouncementCreate />} />
+                            <Route path="admin/announcements/:id/report" element={<AnnouncementReport />} />
+                        </Route>
                     </Route>
                 </Route>
             </Routes>

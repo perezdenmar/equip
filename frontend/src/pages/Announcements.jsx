@@ -87,18 +87,18 @@ const Announcements = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <div>
+                <div className="text-left">
                     <button
                         onClick={() => navigate('/admin/settings')}
                         className="flex items-center text-brand-600 hover:text-brand-500 font-bold transition-colors mb-4"
                     >
                         <ChevronLeft size={18} className="mr-1" /> Back to CMS Settings
                     </button>
-                    <h1 className="text-3xl md:text-4xl font-display font-bold text-zinc-900 dark:text-white mb-2 flex items-center text-left">
+                    <h1 className="text-3xl md:text-4xl font-display font-bold text-zinc-900 dark:text-white mb-2 flex items-center">
                         <Megaphone className="mr-3 text-brand-500" size={36} />
                         Announcements
                     </h1>
-                    <p className="text-zinc-500 dark:text-zinc-400 text-left">Send blast emails and in-app notifications to targeted user segments.</p>
+                    <p className="text-zinc-500 dark:text-zinc-400">Send blast emails and in-app notifications to targeted user segments.</p>
                 </div>
                 <button
                     onClick={() => navigate('/admin/announcements/create')}
@@ -121,7 +121,7 @@ const Announcements = () => {
             )}
 
             <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto text-left">
                     <table className="w-full text-left">
                         <thead className="bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 text-xs uppercase font-bold tracking-wider">
                             <tr>
@@ -142,12 +142,18 @@ const Announcements = () => {
                                 announcements.map((ann) => (
                                     <tr key={ann.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                                         <td className="px-6 py-4">
-                                            <div
-                                                onClick={() => navigate(`/admin/announcements/${ann.id}/report?tab=content`)}
-                                                className="font-bold text-zinc-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 cursor-pointer hover:underline transition-all"
+                                            <button
+                                                onClick={() => {
+                                                    if (ann.status === 'SENT') {
+                                                        navigate(`/admin/announcements/${ann.id}/report?tab=content`);
+                                                    } else {
+                                                        navigate(`/admin/announcements/create?edit=${ann.id}`);
+                                                    }
+                                                }}
+                                                className="font-bold text-zinc-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 transition-colors text-left"
                                             >
                                                 {ann.title}
-                                            </div>
+                                            </button>
                                             <div className="text-xs text-zinc-500 truncate max-w-xs">{ann.subject || 'No subject'}</div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -190,7 +196,7 @@ const Announcements = () => {
                                                         <Eye size={18} />
                                                     </button>
                                                 )}
-                                                {ann.status === 'DRAFT' && (
+                                                {(ann.status === 'DRAFT' || ann.status === 'SCHEDULED') && (
                                                     <button
                                                         onClick={() => handleSendNow(ann)}
                                                         disabled={sendingId === ann.id}

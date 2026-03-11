@@ -59,7 +59,16 @@ export const processAnnouncement = async (announcementId) => {
 
         const channels = announcement.channels;
 
-        // 1. In-App Notifications
+        // 1. Record recipients for tracking/reporting
+        await prisma.announcementRecipient.createMany({
+            data: recipients.map(r => ({
+                announcementId,
+                userId: r.id
+            })),
+            skipDuplicates: true
+        });
+
+        // 2. In-App Notifications
         if (channels.inApp) {
             await prisma.notification.createMany({
                 data: recipients.map(r => ({
@@ -69,18 +78,9 @@ export const processAnnouncement = async (announcementId) => {
                     type: announcement.priority ? 'WARNING' : 'INFO'
                 }))
             });
-
-            // Track recipients for read status
-            await prisma.announcementRecipient.createMany({
-                data: recipients.map(r => ({
-                    announcementId,
-                    userId: r.id
-                })),
-                skipDuplicates: true
-            });
         }
 
-        // 2. Email Delivery (Batched)
+        // 3. Email Delivery (Batched)
         if (channels.email) {
             const batchSize = 50;
             for (let i = 0; i < recipients.length; i += batchSize) {
@@ -122,16 +122,28 @@ export const processAnnouncement = async (announcementId) => {
  * Check and process scheduled announcements.
  */
 export const checkScheduledAnnouncements = async () => {
-    const now = new Date();
-    const scheduled = await prisma.announcement.findMany({
-        where: {
-            status: 'SCHEDULED',
-            scheduledAt: { lte: now }
-        }
-    });
+    try {
+        const now = new Date();
+        const scheduled = await prisma.announcement.findMany({
+            where: {
+                status: 'SCHEDULED',
+                scheduledAt: { lte: now }
+            }
+        });
 
-    for (const ann of scheduled) {
-        console.log(`[AnnouncementService] Triggering scheduled announcement: ${ann.title}`);
-        await processAnnouncement(ann.id);
+        if (scheduled.length > 0) {
+            console.log(`[AnnouncementService] Found ${scheduled.length} scheduled announcement(s) to process.`);
+        }
+
+        for (const ann of scheduled) {
+            try {
+                console.log(`[AnnouncementService] Triggering scheduled announcement: "${ann.title}" (ID: ${ann.id})`);
+                await processAnnouncement(ann.id);
+            } catch (err) {
+                console.error(`[AnnouncementService] Failed to process scheduled announcement ${ann.id}:`, err);
+            }
+        }
+    } catch (error) {
+        console.error('[AnnouncementService] Error in checkScheduledAnnouncements:', error);
     }
 };

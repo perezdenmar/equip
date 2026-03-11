@@ -7,23 +7,24 @@ import {
     ExternalLink, AlertTriangle, Loader2, ArrowLeft,
     CheckCircle, Megaphone
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/client.js';
 
 const AnnouncementCreate = () => {
     const navigate = useNavigate();
-    const location = useLocation();
-
-    // Parse edit parameter from URL
-    const queryParams = new URLSearchParams(location.search);
-    const editId = queryParams.get('edit');
-    const isEditing = !!editId;
-
+    const [searchParams] = useSearchParams();
+    const editId = searchParams.get('edit');
     const [step, setStep] = useState(1);
+    const [fetching, setFetching] = useState(!!editId);
     const [saving, setSaving] = useState(false);
-    const [fetching, setFetching] = useState(isEditing);
     const [targetCount, setTargetCount] = useState(0);
     const [loadingCount, setLoadingCount] = useState(false);
+    const [scheduleParts, setScheduleParts] = useState({
+        date: '',
+        hour: '12',
+        minute: '00',
+        ampm: 'AM'
+    });
 
     const [formData, setFormData] = useState({
         title: '',
@@ -41,31 +42,55 @@ const AnnouncementCreate = () => {
     });
 
     useEffect(() => {
-        if (isEditing) {
-            fetchExistingAnnouncement();
+        if (editId) {
+            fetchAnnouncement();
         }
     }, [editId]);
 
-    const fetchExistingAnnouncement = async () => {
-        setFetching(true);
+    const fetchAnnouncement = async () => {
         try {
             const res = await api.get(`/announcements/${editId}`);
-            const ann = res.data;
+            const data = res.data;
+            let formattedDate = '';
+            // Format date for datetime-local input
+            if (data.scheduledAt) {
+                const date = new Date(data.scheduledAt);
+                formattedDate = date.toISOString();
 
-            // Map backend data to form state
+                // Extract local components
+                const yyyy = date.getFullYear();
+                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                const dd = String(date.getDate()).padStart(2, '0');
+                const datePart = `${yyyy}-${mm}-${dd}`;
+                
+                let h = date.getHours();
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                h = h % 12;
+                h = h ? h : 12; // 0 becomes 12
+                const hourPart = String(h);
+                const minutePart = String(date.getMinutes()).padStart(2, '0');
+
+                setScheduleParts({
+                    date: datePart,
+                    hour: hourPart,
+                    minute: minutePart,
+                    ampm: ampm
+                });
+            }
+
             setFormData({
-                title: ann.title || '',
-                subject: ann.subject || '',
-                content: ann.content || '',
-                ctaLink: ann.ctaLink || '',
-                priority: !!ann.priority,
-                channels: ann.channels || { inApp: true, email: true },
-                targetCriteria: ann.targetCriteria || { roles: [], locations: [], qualificationIds: [] },
-                scheduledAt: ann.scheduledAt ? new Date(ann.scheduledAt).toISOString().slice(0, 16) : ''
+                title: data.title,
+                subject: data.subject || '',
+                content: data.content,
+                ctaLink: data.ctaLink || '',
+                priority: !!data.priority,
+                channels: data.channels || { inApp: true, email: true },
+                targetCriteria: data.targetCriteria || { roles: [], locations: [], qualificationIds: [] },
+                scheduledAt: formattedDate
             });
         } catch (error) {
             console.error('Failed to fetch announcement for editing', error);
-            alert('Could not load announcement data. It may have been deleted.');
+            alert('Failed to load announcement data.');
             navigate('/admin/announcements');
         } finally {
             setFetching(false);
@@ -120,7 +145,18 @@ const AnnouncementCreate = () => {
     const handlePublish = async (isTest = false) => {
         if (isTest) {
             try {
-                await api.post('/announcements/preview', formData);
+                // Assemble scheduledAt from parts if date is set
+                let finalScheduledAt = formData.scheduledAt;
+                if (scheduleParts.date) {
+                    const [y, m, d] = scheduleParts.date.split('-');
+                    let h = parseInt(scheduleParts.hour);
+                    if (scheduleParts.ampm === 'PM' && h < 12) h += 12;
+                    if (scheduleParts.ampm === 'AM' && h === 12) h = 0;
+                    const dateObj = new Date(y, m - 1, d, h, parseInt(scheduleParts.minute));
+                    finalScheduledAt = dateObj.toISOString();
+                }
+
+                await api.post('/announcements/preview', { ...formData, scheduledAt: finalScheduledAt });
                 alert('Test email sent to your address!');
             } catch (error) {
                 alert('Failed to send test email.');
@@ -130,15 +166,28 @@ const AnnouncementCreate = () => {
 
         setSaving(true);
         try {
-            if (isEditing) {
-                await api.put(`/announcements/${editId}`, formData);
+            // Assemble scheduledAt from parts if date is set
+            let finalScheduledAt = null;
+            if (scheduleParts.date) {
+                const [y, m, d] = scheduleParts.date.split('-');
+                let h = parseInt(scheduleParts.hour);
+                if (scheduleParts.ampm === 'PM' && h < 12) h += 12;
+                if (scheduleParts.ampm === 'AM' && h === 12) h = 0;
+                const dateObj = new Date(y, m - 1, d, h, parseInt(scheduleParts.minute));
+                finalScheduledAt = dateObj.toISOString();
+            }
+
+            const submissionData = { ...formData, scheduledAt: finalScheduledAt };
+
+            if (editId) {
+                await api.patch(`/announcements/${editId}`, submissionData);
             } else {
-                await api.post('/announcements', formData);
+                await api.post('/announcements', submissionData);
             }
             navigate('/admin/announcements');
         } catch (error) {
             console.error('Failed to save announcement', error);
-            alert(`Failed to ${isEditing ? 'update' : 'create'} announcement.`);
+            alert('Failed to save announcement.');
         } finally {
             setSaving(false);
         }
@@ -152,26 +201,22 @@ const AnnouncementCreate = () => {
         formData.content !== '<p><br></p>';
 
     const handleImmediateSend = async () => {
-        if (!window.confirm('Are you sure you want to send this announcement to all targeted users immediately?')) return;
-
+        if (!window.confirm('Are you sure you want to send this announcement to all targets immediately?')) return;
+        
         setSaving(true);
         try {
-            let annId = editId;
-
-            // 1. Save changes first
-            if (isEditing) {
-                await api.put(`/announcements/${editId}`, { ...formData, scheduledAt: null });
+            let id = editId;
+            if (id) {
+                await api.patch(`/announcements/${id}`, { ...formData, scheduledAt: null });
             } else {
                 const res = await api.post('/announcements', { ...formData, scheduledAt: null });
-                annId = res.data.id;
+                id = res.data.id;
             }
-
-            // 2. Trigger send
-            await api.post(`/announcements/${annId}/send`);
-
+            
+            await api.post(`/announcements/${id}/send`);
             navigate('/admin/announcements');
         } catch (error) {
-            console.error('Failed to send announcement immediately', error);
+            console.error('Immediate send failed', error);
             alert('Failed to send announcement.');
         } finally {
             setSaving(false);
@@ -181,8 +226,8 @@ const AnnouncementCreate = () => {
     if (fetching) {
         return (
             <div className="flex flex-col items-center justify-center h-96">
-                <Loader2 className="animate-spin text-brand-600 mb-4" size={48} />
-                <p className="text-zinc-500 font-medium font-display uppercase tracking-widest text-xs">Loading Draft Data...</p>
+                <Loader2 className="animate-spin text-brand-500 mb-4" size={48} />
+                <p className="text-zinc-500 font-medium">Loading announcement data...</p>
             </div>
         );
     }
@@ -207,10 +252,10 @@ const AnnouncementCreate = () => {
                     </div>
                     <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white flex items-center gap-3">
                         <Megaphone className="text-brand-500" size={32} />
-                        {isEditing ? 'Edit Announcement Draft' : 'Create New Announcement'}
+                        {editId ? 'Edit Announcement Draft' : 'Create New Announcement'}
                     </h1>
                     <p className="text-zinc-500 dark:text-zinc-400">
-                        {isEditing ? 'Refine your existing message and targeting rules.' : 'Compose your message and define target recipients.'}
+                        {editId ? 'Refine your existing message and targeting rules.' : 'Compose your message and define target recipients.'}
                     </p>
                 </div>
             </div>
@@ -380,15 +425,44 @@ const AnnouncementCreate = () => {
                                 <div className="flex flex-col md:flex-row gap-6">
                                     <div className="flex-1 space-y-2">
                                         <label className="text-xs font-bold text-zinc-500 uppercase">Send Future Date (Optional)</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-                                            <input
-                                                type="datetime-local"
-                                                name="scheduledAt"
-                                                value={formData.scheduledAt}
-                                                onChange={handleInputChange}
-                                                className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:ring-2 focus:ring-brand-500 outline-none"
-                                            />
+                                        <div className="flex flex-wrap gap-3">
+                                            <div className="relative flex-1 min-w-[200px]">
+                                                <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
+                                                <input
+                                                    type="date"
+                                                    value={scheduleParts.date}
+                                                    onChange={(e) => setScheduleParts(prev => ({ ...prev, date: e.target.value }))}
+                                                    className="w-full pl-12 pr-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                                                />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={scheduleParts.hour}
+                                                    onChange={(e) => setScheduleParts(prev => ({ ...prev, hour: e.target.value }))}
+                                                    className="px-3 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                                                >
+                                                    {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                                                        <option key={h} value={h}>{h}</option>
+                                                    ))}
+                                                </select>
+                                                <select
+                                                    value={scheduleParts.minute}
+                                                    onChange={(e) => setScheduleParts(prev => ({ ...prev, minute: e.target.value }))}
+                                                    className="px-3 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                                                >
+                                                    {['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].map(m => (
+                                                        <option key={m} value={m}>{m}</option>
+                                                    ))}
+                                                </select>
+                                                <select
+                                                    value={scheduleParts.ampm}
+                                                    onChange={(e) => setScheduleParts(prev => ({ ...prev, ampm: e.target.value }))}
+                                                    className="px-3 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                                                >
+                                                    <option value="AM">AM</option>
+                                                    <option value="PM">PM</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <p className="text-xs text-zinc-500 italic">Announcement will be sent automatically at the specified local time.</p>
                                     </div>
@@ -405,6 +479,13 @@ const AnnouncementCreate = () => {
                                             className="w-full py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-70 flex items-center justify-center gap-2"
                                         >
                                             <Send size={18} /> Send Now
+                                        </button>
+                                        <button
+                                            onClick={() => handlePublish(false)}
+                                            disabled={saving || !scheduleParts.date}
+                                            className={`w-full py-3 border-2 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${scheduleParts.date ? 'border-brand-500 text-brand-600 dark:text-brand-400 bg-brand-50/50 dark:bg-brand-900/10 hover:bg-brand-50 dark:hover:bg-brand-900/20 active:scale-95' : 'border-zinc-200 dark:border-zinc-800 text-zinc-400 cursor-not-allowed opacity-50'}`}
+                                        >
+                                            <Calendar size={18} /> Send Later
                                         </button>
                                     </div>
                                 </div>
@@ -467,7 +548,7 @@ const AnnouncementCreate = () => {
                                 {saving ? (
                                     <><Loader2 className="animate-spin mr-2" /> Processing...</>
                                 ) : (
-                                    <><Save className="mr-2" size={20} /> {formData.scheduledAt ? (isEditing ? 'Update Schedule' : 'Schedule Blast') : (isEditing ? 'Save Changes' : 'Save as Draft')}</>
+                                    <><Save className="mr-2" size={20} /> {(formData.scheduledAt || scheduleParts.date) ? 'Schedule Blast' : 'Save as Draft'}</>
                                 )}
                             </button>
                         )}

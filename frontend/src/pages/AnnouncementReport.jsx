@@ -51,6 +51,7 @@ const AnnouncementReport = () => {
     const fetchReport = async (isManualClick = true) => {
         if (isManualClick) setReportLoading(true);
         try {
+            setError(null);
             const res = await api.get(`/announcements/${id}/report`);
             setReport(res.data);
         } catch (err) {
@@ -58,6 +59,7 @@ const AnnouncementReport = () => {
             if (isManualClick) {
                 alert('Delivery report data is currently unavailable. Please try again later.');
             }
+            setError(err.response?.status || 500);
         } finally {
             if (isManualClick) setReportLoading(false);
         }
@@ -71,17 +73,27 @@ const AnnouncementReport = () => {
         return (
             <div className="max-w-4xl mx-auto px-4 py-20 text-center">
                 <XCircle size={64} className="mx-auto text-red-500 mb-4 opacity-20" />
-                <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{error || 'Announcement Not Found'}</h2>
-                <p className="text-zinc-500 mb-8">The requested announcement could not be loaded. It may have been deleted.</p>
-                <button onClick={() => navigate('/admin/announcements')} className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-bold transition-transform active:scale-95">
-                    Return to Announcements
-                </button>
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{error === 404 ? 'Report Not Found' : (error || 'Announcement Not Found')}</h2>
+                <p className="text-zinc-500 mb-8">The requested announcement could not be loaded. It may have been deleted or never existed.</p>
+                <div className="flex justify-center gap-4">
+                    <button onClick={() => navigate('/admin/announcements')} className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-bold transition-transform active:scale-95">
+                        Return to Announcements
+                    </button>
+                    <button onClick={() => fetchInitialData()} className="px-6 py-3 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white rounded-xl font-bold">
+                        Retry
+                    </button>
+                </div>
             </div>
         );
     }
 
+    const getUserName = (u) => {
+        if (!u) return 'Unknown';
+        return `${u.firstName || ''} ${u.lastName || ''}`.trim() || 'No Name';
+    };
+
     const filteredRecipients = report?.recipients?.filter(r =>
-        `${r.user.firstName || ''} ${r.user.lastName || ''}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getUserName(r.user).toLowerCase().includes(searchTerm.toLowerCase()) ||
         r.user.email.toLowerCase().includes(searchTerm.toLowerCase())
     ) || [];
 
@@ -96,7 +108,7 @@ const AnnouncementReport = () => {
                     >
                         <ChevronLeft size={18} className="mr-1" /> Back to Dashboard
                     </button>
-                    <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white flex items-center gap-3">
+                    <h1 className="text-3xl font-display font-bold text-zinc-900 dark:text-white flex items-center gap-3 text-left">
                         <Megaphone className="text-brand-500" size={32} />
                         {announcement.title}
                     </h1>
@@ -107,7 +119,7 @@ const AnnouncementReport = () => {
                             }`}>
                             {announcement.status}
                         </span>
-                        <span className="text-zinc-400 text-xs text-zinc-500">
+                        <span className="text-zinc-400 text-xs">
                             {announcement.sentAt ? `Sent on ${new Date(announcement.sentAt).toLocaleString()}` :
                                 announcement.scheduledAt ? `Scheduled for ${new Date(announcement.scheduledAt).toLocaleString()}` :
                                     'Draft Version'}
@@ -151,7 +163,7 @@ const AnnouncementReport = () => {
 
             {activeTab === 'content' ? (
                 <div className="space-y-8 animate-in fade-in duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
                         <div className="md:col-span-2 space-y-8">
                             {/* Message Preview */}
                             <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
@@ -186,9 +198,9 @@ const AnnouncementReport = () => {
                             </div>
                         </div>
 
-                        <div className="space-y-8">
+                        <div className="space-y-6">
                             {/* Configuration Info */}
-                            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                            <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm lg:sticky lg:top-8">
                                 <h3 className="font-bold text-zinc-900 dark:text-white mb-6">Execution Config</h3>
 
                                 <div className="space-y-6">
@@ -210,12 +222,12 @@ const AnnouncementReport = () => {
                                                     <Zap size={14} fill="currentColor" /> HIGH PRIORITY
                                                 </span>
                                             ) : (
-                                                <span className="text-zinc-500 text-xs font-medium">STANDARD</span>
+                                                <span className="text-zinc-500 text-xs font-medium uppercase">STANDARD</span>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div>
+                                    <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
                                         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Recipients Reach</label>
                                         <div className="text-2xl font-bold text-zinc-900 dark:text-white">{announcement._count?.recipients || 0}</div>
                                         <p className="text-[10px] text-zinc-500">Total users processed</p>
@@ -231,7 +243,7 @@ const AnnouncementReport = () => {
                     {reportLoading ? (
                         <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800">
                             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-500 mb-4"></div>
-                            <p className="text-zinc-500 font-medium">Analyzing delivery data...</p>
+                            <p className="text-zinc-500 font-medium font-display uppercase tracking-widest text-xs">Analyzing delivery data...</p>
                         </div>
                     ) : report ? (
                         <>
@@ -240,7 +252,7 @@ const AnnouncementReport = () => {
                                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                                         <Users size={120} />
                                     </div>
-                                    <div className="relative z-10">
+                                    <div className="relative z-10 text-left">
                                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-4">Total Sent</span>
                                         <div className="text-4xl font-display font-bold text-zinc-900 dark:text-white">{report.stats.totalSent}</div>
                                         <p className="text-xs text-zinc-500 mt-2">Delivered to unique user accounts</p>
@@ -251,7 +263,7 @@ const AnnouncementReport = () => {
                                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                                         <Eye size={120} />
                                     </div>
-                                    <div className="relative z-10">
+                                    <div className="relative z-10 text-left">
                                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-4">Read Count</span>
                                         <div className="text-4xl font-display font-bold text-zinc-900 dark:text-white">{report.stats.readCount}</div>
                                         <p className="text-xs text-zinc-500 mt-2">In-app notifications seen by users</p>
@@ -262,7 +274,7 @@ const AnnouncementReport = () => {
                                     <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                                         <BarChart3 size={120} />
                                     </div>
-                                    <div className="relative z-10">
+                                    <div className="relative z-10 text-left">
                                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-4">Read Rate</span>
                                         <div className="text-4xl font-display font-bold text-zinc-900 dark:text-white">{report.stats.readRate}%</div>
                                         <div className="w-full bg-zinc-100 dark:bg-zinc-800 h-1.5 rounded-full mt-3 overflow-hidden">
@@ -273,7 +285,7 @@ const AnnouncementReport = () => {
                             </div>
 
                             {/* Recipient Table */}
-                            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+                            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden text-left">
                                 <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-center gap-4">
                                     <h2 className="font-bold text-zinc-900 dark:text-white">Recipient Logs</h2>
                                     <div className="relative w-full md:w-80">
@@ -294,21 +306,20 @@ const AnnouncementReport = () => {
                                             <tr>
                                                 <th className="px-6 py-4">Participant</th>
                                                 <th className="px-6 py-4">Role</th>
-                                                <th className="px-6 py-4">Status</th>
                                                 <th className="px-6 py-4 text-right">Processed At</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                                             {filteredRecipients.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="4" className="px-6 py-10 text-center text-zinc-500 italic">No activity logs available matching this criteria.</td>
+                                                    <td colSpan="3" className="px-6 py-10 text-center text-zinc-500 italic">No activity logs available matching this criteria.</td>
                                                 </tr>
                                             ) : (
                                                 filteredRecipients.map((rec) => (
                                                     <tr key={rec.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
                                                         <td className="px-6 py-4">
                                                             <div className="font-bold text-zinc-900 dark:text-white">
-                                                                {rec.user.firstName} {rec.user.lastName}
+                                                                {getUserName(rec.user)}
                                                             </div>
                                                             <div className="text-[10px] text-zinc-500 font-medium">{rec.user.email}</div>
                                                         </td>
@@ -316,17 +327,6 @@ const AnnouncementReport = () => {
                                                             <span className="text-[10px] font-bold px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-500 uppercase">
                                                                 {rec.user.role}
                                                             </span>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            {rec.isRead ? (
-                                                                <span className="inline-flex items-center text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full uppercase">
-                                                                    <Eye size={10} className="mr-1" /> Seen
-                                                                </span>
-                                                            ) : (
-                                                                <span className="inline-flex items-center text-[10px] font-bold text-zinc-400 bg-zinc-50 dark:bg-zinc-800/50 px-2 py-0.5 rounded-full uppercase">
-                                                                    <Mail size={10} className="mr-1" /> Delivered
-                                                                </span>
-                                                            )}
                                                         </td>
                                                         <td className="px-6 py-4 text-right text-xs text-zinc-500 font-mono">
                                                             {new Date(rec.sentAt).toLocaleString()}
@@ -344,7 +344,7 @@ const AnnouncementReport = () => {
                             <XCircle size={48} className="text-zinc-300 mb-4" />
                             <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Metrics Unavailable</h3>
                             <p className="text-zinc-500 max-w-sm mx-auto mb-6">Execution metrics might still be processing or failed to sync. Announcement content is visible in the primary tab.</p>
-                            <button onClick={() => fetchReport(true)} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold text-sm">
+                            <button onClick={() => fetchReport(true)} className="px-6 py-2 bg-brand-600 text-white rounded-xl font-bold text-sm shadow-md transition-transform active:scale-95">
                                 Retry Fetching Data
                             </button>
                         </div>

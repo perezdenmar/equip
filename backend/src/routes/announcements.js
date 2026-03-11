@@ -23,6 +23,76 @@ router.get('/', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => 
     }
 });
 
+// Get detailed report (Admin Only) - Moved up to avoid conflicts with /:id
+router.get('/:id/report', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const announcement = await prisma.announcement.findUnique({
+            where: { id },
+            include: {
+                author: {
+                    select: { firstName: true, lastName: true, email: true }
+                },
+                _count: {
+                    select: { recipients: true }
+                },
+                recipients: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                role: true,
+                                city: true,
+                                province: true,
+                                region: true
+                            }
+                        }
+                    },
+                    orderBy: { sentAt: 'desc' }
+                }
+            }
+        });
+
+        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
+
+        // Calculate stats with fallback for empty recipients
+        const recipients = announcement.recipients || [];
+        const totalSent = announcement._count?.recipients || 0;
+        const readCount = recipients.filter(r => r.isRead).length;
+
+        res.json({
+            ...announcement,
+            stats: {
+                totalSent,
+                readCount,
+                readRate: totalSent > 0 ? Math.round((readCount / totalSent) * 100) : 0
+            }
+        });
+    } catch (error) {
+        console.error('Fetch report error:', error);
+        res.status(500).json({ error: 'Failed to fetch announcement report', details: error.message });
+    }
+});
+
+// Get single announcement (Admin Only)
+router.get('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const announcement = await prisma.announcement.findUnique({
+            where: { id }
+        });
+
+        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
+
+        res.json(announcement);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch announcement' });
+    }
+});
+
 // Create announcement (Admin Only)
 router.post('/', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
     try {
@@ -56,16 +126,16 @@ router.post('/', authenticateToken, authorizeRoles('ADMIN'), async (req, res) =>
 });
 
 // Update announcement (Admin Only)
-router.put('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
+router.patch('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
     try {
         const { id } = req.params;
         const { title, subject, content, ctaLink, targetCriteria, channels, scheduledAt, priority } = req.body;
 
-        const announcement = await prisma.announcement.findUnique({ where: { id } });
-        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
-        if (announcement.status === 'SENT') return res.status(400).json({ error: 'Cannot edit sent announcements' });
+        const existing = await prisma.announcement.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: 'Announcement not found' });
+        if (existing.status === 'SENT') return res.status(400).json({ error: 'Cannot edit sent announcement' });
 
-        const updated = await prisma.announcement.update({
+        const announcement = await prisma.announcement.update({
             where: { id },
             data: {
                 title,
@@ -76,11 +146,11 @@ router.put('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) 
                 channels,
                 priority: !!priority,
                 scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-                status: scheduledAt ? 'SCHEDULED' : 'DRAFT'
+                status: (scheduledAt && existing.status !== 'SENT') ? 'SCHEDULED' : (scheduledAt === null && existing.status === 'SCHEDULED' ? 'DRAFT' : existing.status)
             }
         });
 
-        res.json(updated);
+        res.json(announcement);
     } catch (error) {
         console.error('Update announcement error:', error);
         res.status(500).json({ error: 'Failed to update announcement' });
@@ -122,6 +192,14 @@ router.post('/:id/send', authenticateToken, authorizeRoles('ADMIN'), async (req,
         if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
         if (announcement.status === 'SENT') return res.status(400).json({ error: 'Already sent' });
 
+        // If it was scheduled, clear the schedule so it doesn't double-send
+        if (announcement.scheduledAt) {
+            await prisma.announcement.update({
+                where: { id },
+                data: { scheduledAt: null }
+            });
+        }
+
         // Process in background to avoid timeout
         processAnnouncement(id);
 
@@ -162,76 +240,6 @@ router.post('/count-targets', authenticateToken, authorizeRoles('ADMIN'), async 
         res.json({ count: recipients.length });
     } catch (error) {
         res.status(500).json({ error: 'Failed to count targets' });
-    }
-});
-
-// Get basic detail (Admin Only) - Fast & Robust fallback
-router.get('/:id', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
-    try {
-        const { id } = req.params;
-        const announcement = await prisma.announcement.findUnique({
-            where: { id },
-            include: {
-                _count: {
-                    select: { recipients: true }
-                }
-            }
-        });
-
-        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
-        res.json(announcement);
-    } catch (error) {
-        console.error('Fetch announcement detail error:', error);
-        res.status(500).json({ error: 'Failed to fetch announcement details' });
-    }
-});
-
-// Get detailed report (Admin Only)
-router.get('/:id/report', authenticateToken, authorizeRoles('ADMIN'), async (req, res) => {
-    try {
-        const { id } = req.params;
-        const announcement = await prisma.announcement.findUnique({
-            where: { id },
-            include: {
-                _count: {
-                    select: { recipients: true }
-                },
-                recipients: {
-                    include: {
-                        user: {
-                            select: {
-                                id: true,
-                                firstName: true,
-                                lastName: true,
-                                email: true,
-                                role: true,
-                                location: true
-                            }
-                        }
-                    },
-                    orderBy: { sentAt: 'desc' }
-                }
-            }
-        });
-
-        if (!announcement) return res.status(404).json({ error: 'Announcement not found' });
-
-        // Calculate stats
-        const readCount = announcement.recipients.filter(r => r.isRead).length;
-
-        res.json({
-            ...announcement,
-            stats: {
-                totalSent: announcement._count.recipients,
-                readCount,
-                readRate: announcement._count.recipients > 0
-                    ? Math.round((readCount / announcement._count.recipients) * 100)
-                    : 0
-            }
-        });
-    } catch (error) {
-        console.error('Fetch report error:', error);
-        res.status(500).json({ error: 'Failed to fetch announcement report' });
     }
 });
 
