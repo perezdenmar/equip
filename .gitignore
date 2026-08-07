@@ -1,4 +1,4 @@
-﻿# Environment secrets — NEVER commit these
+# Environment secrets — NEVER commit these
 .env
 .env.local
 .env.production
@@ -42,3 +42,24 @@ backend/node_modules/
 
 # Test coverage
 coverage/
+
+# TLS / SSL certificates — store outside repo on NAS at /volume2/certs/
+*.pem
+*.crt
+*.key
+*.p12
+*.pfx
+
+# Operational debug/diagnostic scripts — moved to backend/scripts/diagnostics/
+backend/check_*.js
+backend/debug_*.js
+backend/test-*.js
+backend/test_*.js
+backend/verify_*.js
+backend/seed_report_test.js
+backend/apply_partner_schema.js
+
+# Log and diagnostic output files committed by accident
+backend/*.txt
+backend/boot.log
+boot.log
