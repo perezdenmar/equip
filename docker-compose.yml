@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: equip-db
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
@@ -19,7 +19,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: equip-backend
-    restart: always
+    restart: unless-stopped
     depends_on:
       - db
     environment:
@@ -46,7 +46,7 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL}
     container_name: equip-frontend
-    restart: always
+    restart: unless-stopped
     ports:
       - "8080:80"
     depends_on:
@@ -57,9 +57,12 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: equip-tunnel
-    restart: always
+    restart: unless-stopped
     volumes:
-      - .:/etc/cloudflared
+      # Mount only specific files — NOT the whole repo
+      # Store cert at /volume2/certs/equip/ on NAS, config at /volume2/config/equip/
+      - /volume2/certs/equip:/etc/cloudflared/certs:ro
+      - /volume2/config/equip/config.yml:/etc/cloudflared/config.yml:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     networks:
       - equip-network
