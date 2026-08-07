@@ -1,62 +1,50 @@
 import dotenv from 'dotenv';
 dotenv.config();
-console.log('[Debug] Importing modules...');
+
 import fs from 'fs';
-fs.writeFileSync('boot.log', 'Server started at ' + new Date().toISOString() + '\n');
-console.log('[Debug] Importing express...');
 import express from 'express';
-console.log('[Debug] Importing cors...');
 import cors from 'cors';
-console.log('[Debug] Importing helmet...');
 import helmet from 'helmet';
-console.log('[Debug] Importing path...');
 import path from 'path';
-console.log('[Debug] Importing prisma...');
+import rateLimit from 'express-rate-limit';
+import pino from 'pino';
+
 import prisma from './lib/prisma.js';
-console.log('[Debug] Importing authRoutes...');
 import authRoutes from './routes/auth.js';
-console.log('[Debug] Importing aiRoutes...');
 import aiRoutes from './routes/ai.js';
-console.log('[Debug] Importing jobsRoutes...');
 import jobsRoutes from './routes/jobs.js';
-console.log('[Debug] Importing qualificationsRoutes...');
 import qualificationsRoutes from './routes/qualifications.js';
-console.log('[Debug] Importing documentsRoutes...');
 import documentsRoutes from './routes/documents.js';
-console.log('[Debug] Importing usersRoutes...');
 import usersRoutes from './routes/users.js';
-console.log('[Debug] Importing coursesRoutes...');
 import coursesRoutes from './routes/courses.js';
-console.log('[Debug] Importing settingsRoutes...');
 import settingsRoutes from './routes/settings.js';
-console.log('[Debug] Importing contactRoutes...');
 import contactRoutes from './routes/contact.js';
-console.log('[Debug] Importing certificateRoutes...');
 import certificateRoutes from './routes/certificates.js';
-console.log('[Debug] Importing enrollmentRoutes...');
 import enrollmentRoutes from './routes/enrollments.js';
-console.log('[Debug] Importing notificationRoutes...');
 import notificationRoutes from './routes/notifications.js';
-console.log('[Debug] Importing analyticsRoutes...');
 import analyticsRoutes from './routes/analytics.js';
-console.log('[Debug] Importing wishlistRoutes...');
 import wishlistRoutes from './routes/wishlist.js';
-console.log('[Debug] Importing pointsRoutes...');
 import pointsRoutes from './routes/points.js';
-console.log('[Debug] Importing referralRoutes...');
 import referralRoutes from './routes/referrals.js';
-console.log('[Debug] Importing partnerRoutes...');
 import partnerRoutes from './routes/partners.js';
 import announcementRoutes from './routes/announcements.js';
-console.log('[Debug] Importing initializeScheduler...');
 import { initializeScheduler } from './services/syncScheduler.js';
 
-console.log('[Debug] All modules imported. Initializing app...');
+// ─── Logger ────────────────────────────────────────────────────────────────
+export const logger = pino({
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+    transport: process.env.NODE_ENV !== 'production'
+        ? { target: 'pino-pretty', options: { colorize: true } }
+        : undefined,
+});
 
-console.log('[Debug] Initializing Express app...');
+logger.info('All modules imported. Initializing app...');
+
+// ─── App Init ──────────────────────────────────────────────────────────────
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ─── CORS ──────────────────────────────────────────────────────────────────
 const allowedOrigins = [
     'https://equipdigos.com',
     'https://www.equipdigos.com',
@@ -75,32 +63,53 @@ if (process.env.CORS_ORIGIN) {
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-
-        // Normalize origin: lowercase and remove trailing slash for comparison
         const normalized = origin.toLowerCase().replace(/\/$/, '');
-
         const isExplicitlyAllowed = allowedOrigins.some(ao => ao.toLowerCase().replace(/\/$/, '') === normalized);
         const isEquipDomain = /^https?:\/\/(?:www\.|api\.)?equipdigos\.com(?::\d+)?$/.test(normalized);
         const isLocalhost = /^http:\/\/localhost(:\d+)?$/.test(normalized);
-
         if (isExplicitlyAllowed || isEquipDomain || isLocalhost) {
             callback(null, true);
         } else {
-            console.error(`[CORS Blocked] Origin: ${origin}`);
-            callback(null, false); // Standard way to deny
+            logger.warn({ origin }, '[CORS Blocked]');
+            callback(null, false);
         }
     },
     credentials: true,
     optionsSuccessStatus: 200
 }));
 
+// ─── Security Headers (Helmet + CSP) ───────────────────────────────────────
 app.use(helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc:  ["'self'"],
+            styleSrc:   ["'self'", "'unsafe-inline'"],
+            imgSrc:     ["'self'", 'data:', 'https:'],
+            connectSrc: ["'self'", 'https://api.equipdigos.com'],
+            fontSrc:    ["'self'", 'https://fonts.gstatic.com'],
+            objectSrc:  ["'none'"],
+            upgradeInsecureRequests: [],
+        },
+    },
 }));
+
 app.use(express.json());
 
-// Serve static files from the uploads directory
+// ─── Rate Limiting ─────────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many attempts. Please try again in 15 minutes.' }
+});
+
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+
+// ─── Static File Serving ───────────────────────────────────────────────────
 const uploadsDir = path.join(process.cwd(), 'uploads');
 const rewardsDir = path.join(uploadsDir, 'rewards');
 const partnersDir = path.join(uploadsDir, 'partners');
@@ -111,30 +120,29 @@ const partnersDir = path.join(uploadsDir, 'partners');
 
 app.use('/uploads', express.static(uploadsDir));
 
-app.use('/api/auth', authRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/jobs', jobsRoutes);
+// ─── Routes ────────────────────────────────────────────────────────────────
+app.use('/api/auth',           authRoutes);
+app.use('/api/ai',             aiRoutes);
+app.use('/api/jobs',           jobsRoutes);
 app.use('/api/qualifications', qualificationsRoutes);
-app.use('/api/documents', documentsRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/courses', coursesRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api/certificates', certificateRoutes);
-app.use('/api/enrollments', enrollmentRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/points', pointsRoutes);
-app.use('/api/referrals', referralRoutes);
-app.use('/api/partners', partnerRoutes);
-app.use('/api/announcements', announcementRoutes);
+app.use('/api/documents',      documentsRoutes);
+app.use('/api/users',          usersRoutes);
+app.use('/api/courses',        coursesRoutes);
+app.use('/api/settings',       settingsRoutes);
+app.use('/api/contact',        contactRoutes);
+app.use('/api/certificates',   certificateRoutes);
+app.use('/api/enrollments',    enrollmentRoutes);
+app.use('/api/notifications',  notificationRoutes);
+app.use('/api/analytics',      analyticsRoutes);
+app.use('/api/wishlist',       wishlistRoutes);
+app.use('/api/points',         pointsRoutes);
+app.use('/api/referrals',      referralRoutes);
+app.use('/api/partners',       partnerRoutes);
+app.use('/api/announcements',  announcementRoutes);
 
-app.get('/', (req, res) => {
-    res.send('EQUIP API is running.');
-});
+// ─── Health Check ──────────────────────────────────────────────────────────
+app.get('/', (req, res) => res.send('EQUIP API is running.'));
 
-// Health check endpoint for deployment monitoring & load balancers
 app.get('/health', async (req, res) => {
     try {
         await prisma.$queryRaw`SELECT 1`;
@@ -144,47 +152,49 @@ app.get('/health', async (req, res) => {
     }
 });
 
-// Initialize Background Data Synchronization
-console.log('[Main] Initializing Sync Scheduler...');
+// ─── Background Scheduler ──────────────────────────────────────────────────
+logger.info('Initializing Sync Scheduler...');
 initializeScheduler();
-console.log('[Main] Sync Scheduler Initialized.');
+logger.info('Sync Scheduler initialized.');
 
-// Global error-handling middleware (must be after all routes)
+// ─── Global Error Handler ──────────────────────────────────────────────────
 app.use((err, req, res, next) => {
-    console.error(`[ERROR] ${req.method} ${req.path}:`, err.stack || err.message);
+    logger.error({ err, method: req.method, path: req.path }, 'Unhandled error');
     const statusCode = err.statusCode || 500;
     res.status(statusCode).json({
         error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
     });
 });
 
+// ─── Server Start ──────────────────────────────────────────────────────────
 try {
     const server = app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+        logger.info(`Server running on port ${PORT}`);
     });
 
     server.on('error', (error) => {
         if (error.code === 'EADDRINUSE') {
-            console.error(`[FATAL] Port ${PORT} is already in use.`);
+            logger.fatal(`Port ${PORT} is already in use.`);
         } else {
-            console.error('[FATAL] Server error:', error);
+            logger.fatal({ error }, 'Server error');
         }
         process.exit(1);
     });
 } catch (startupError) {
-    console.error('FATAL STARTUP ERROR:', startupError);
+    logger.fatal({ startupError }, 'FATAL STARTUP ERROR');
     process.exit(1);
 }
 
 process.on('SIGINT', async () => {
+    logger.info('SIGINT received, shutting down...');
     await prisma.$disconnect();
     process.exit();
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('UNCAUGHT EXCEPTION:', err);
+    logger.fatal({ err }, 'UNCAUGHT EXCEPTION');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('UNHANDLED REJECTION:', reason);
+process.on('unhandledRejection', (reason) => {
+    logger.error({ reason }, 'UNHANDLED REJECTION');
 });
