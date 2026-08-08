@@ -1,7 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Loader2, Edit2, Trash2, Shield, User, X } from 'lucide-react';
+import { Users as UsersIcon, Loader2, Edit2, Trash2, Shield, User, X, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client.js';
+
+// Role-based avatar color helper
+const getAvatarColor = (role) => {
+    switch (role) {
+        case 'ADMIN':    return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
+        case 'TRAINER':  return 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300';
+        case 'STAFF':    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+        default:         return 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300';
+    }
+};
+
+const getRoleBadge = (role) => {
+    switch (role) {
+        case 'ADMIN':    return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
+        case 'TRAINER':  return 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300';
+        case 'STAFF':    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
+        default:         return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300';
+    }
+};
 
 const Users = () => {
     const { t } = useTranslation();
@@ -9,10 +28,16 @@ const Users = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // Edit modal state
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [formData, setFormData] = useState({ firstName: '', lastName: '', role: 'STUDENT' });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Delete confirmation modal state
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [userToDelete, setUserToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         fetchUsers();
@@ -57,24 +82,31 @@ const Users = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Are you absolutely sure you want to delete this user? This cannot be undone.')) return;
+    // Open delete confirmation modal instead of window.confirm
+    const openDeleteModal = (user) => {
+        setUserToDelete(user);
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!userToDelete) return;
+        setIsDeleting(true);
         try {
-            await api.delete(`/users/${id}`);
-            setUsers(users.filter(u => u.id !== id));
+            await api.delete(`/users/${userToDelete.id}`);
+            setUsers(users.filter(u => u.id !== userToDelete.id));
+            setIsDeleteModalOpen(false);
+            setUserToDelete(null);
         } catch (err) {
             console.error('Failed to delete user', err);
             alert('Failed to delete user. They might be tied to existing active records.');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
-    const getRoleBadge = (role) => {
-        switch (role) {
-            case 'ADMIN': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300';
-            case 'TRAINER': return 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300';
-            case 'STAFF': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300';
-            default: return 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300';
-        }
+    const handleDeleteCancel = () => {
+        setIsDeleteModalOpen(false);
+        setUserToDelete(null);
     };
 
     return (
@@ -120,15 +152,24 @@ const Users = () => {
                                     <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full bg-brand-100 text-brand-700 font-bold">
-                                                    {u.firstName ? u.firstName[0] : <User size={18} />}
+                                                <div className={`flex-shrink-0 h-10 w-10 flex items-center justify-center rounded-full font-bold text-sm ${getAvatarColor(u.role)}`}>
+                                                    {u.firstName ? u.firstName[0].toUpperCase() : <User size={18} />}
                                                 </div>
                                                 <div className="ml-4">
                                                     <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                                                        {u.firstName} {u.lastName}
+                                                        {u.firstName || u.lastName
+                                                            ? `${u.firstName || ''} ${u.lastName || ''}`.trim()
+                                                            : null
+                                                        }
                                                     </div>
                                                     {!u.firstName && !u.lastName && (
-                                                        <div className="text-sm text-zinc-500 italic">No Name Set</div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-sm text-zinc-400 italic">No Name Set</span>
+                                                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                                                <AlertTriangle size={9} />
+                                                                Incomplete
+                                                            </span>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
@@ -153,7 +194,7 @@ const Users = () => {
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(u.id)}
+                                                onClick={() => openDeleteModal(u)}
                                                 className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 transition-colors"
                                             >
                                                 Delete
@@ -167,14 +208,12 @@ const Users = () => {
                 </div>
             )}
 
-            {/* Edit User Modal */}
+            {/* ── Edit User Modal ── */}
             {isEditModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md border border-zinc-200 dark:border-zinc-800 animate-in fade-in zoom-in duration-200">
                         <div className="flex justify-between items-center p-6 border-b border-zinc-100 dark:border-zinc-800">
-                            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-                                Edit User & Access
-                            </h2>
+                            <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Edit User & Access</h2>
                             <button
                                 onClick={() => setIsEditModalOpen(false)}
                                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
@@ -229,11 +268,76 @@ const Users = () => {
                                     disabled={isSubmitting}
                                     className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium transition-colors flex items-center"
                                 >
-                                    {isSubmitting ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                                    {isSubmitting && <Loader2 className="animate-spin mr-2" size={16} />}
                                     Save Changes
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Delete Confirmation Modal ── */}
+            {isDeleteModalOpen && userToDelete && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/70 backdrop-blur-sm"
+                    onClick={handleDeleteCancel}
+                >
+                    <div
+                        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm border border-zinc-200 dark:border-zinc-800 animate-in fade-in zoom-in duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Red danger header */}
+                        <div className="flex items-center gap-3 p-6 border-b border-zinc-100 dark:border-zinc-800">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                <AlertTriangle className="text-red-600 dark:text-red-400" size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Delete User</h2>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400">This action cannot be undone</p>
+                            </div>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6">
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-3">
+                                You are about to permanently delete:
+                            </p>
+                            <div className="rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-4 py-3 mb-4">
+                                <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                                    {userToDelete.firstName || userToDelete.lastName
+                                        ? `${userToDelete.firstName || ''} ${userToDelete.lastName || ''}`.trim()
+                                        : 'Unnamed User'
+                                    }
+                                </p>
+                                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{userToDelete.email}</p>
+                                <span className={`inline-flex items-center mt-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${getRoleBadge(userToDelete.role)}`}>
+                                    {userToDelete.role === 'ADMIN' && <Shield size={10} className="mr-1" />}
+                                    {userToDelete.role}
+                                </span>
+                            </div>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                All enrollment records, certificates, and data tied to this account will be affected.
+                            </p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3 px-6 pb-6">
+                            <button
+                                onClick={handleDeleteCancel}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDeleteConfirm}
+                                disabled={isDeleting}
+                                className="flex-1 px-4 py-2.5 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isDeleting && <Loader2 className="animate-spin" size={15} />}
+                                {isDeleting ? 'Deleting...' : 'Delete User'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
